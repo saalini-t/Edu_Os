@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Plan. **Nothing is implemented; the repository currently contains only these documents.** Acceptance tests listed are *to be written*; none has been run. |
+| **Status** | Plan. Phase 1 / M1 and **Phase 2 are implemented** as a modular monolith (see [PHASE1_ACCEPTANCE](PHASE1_ACCEPTANCE.md) and [PHASE2_ACCEPTANCE](PHASE2_ACCEPTANCE.md) for what exists, what was run, and deviations); Phases 3-6 are not started except the pieces noted below. Acceptance test IDs in this file are planning labels; the tests that exist and pass are listed in the acceptance documents. |
 | **Version** | 0.1 (2026-10-09) |
 | **Related** | [ARCHITECTURE](ARCHITECTURE.md), [API_CONTRACTS](API_CONTRACTS.md), [AGENT_SPECIFICATIONS](AGENT_SPECIFICATIONS.md), [EVALUATION_PLAN](EVALUATION_PLAN.md) |
 
@@ -102,6 +102,10 @@ Each phase lists deliverables, dependencies, acceptance tests (to be written/run
 - **Tests:** unit (chunker, RRF, verifier), integration (worker), eval.
 - **Risks:** OCR quality and formulas; embedding model setup; slow indexing. Mitigation: team-authored clean seed corpus; small model; OCR only where needed.
 
+> **Phase 2 status (2026-10-09): implemented and verified as described in [PHASE2_ACCEPTANCE](PHASE2_ACCEPTANCE.md).** Delivered beyond/against this list: pgvector + RRF hybrid retrieval with a controlled re-embedding command and a visible full-text fallback; PostgreSQL-backed ingestion jobs with a Redis wake-up and a separate worker process (no `arq`, no separate service); versioned documents with atomic replace / re-index; optional page-level OCR (RapidOCR) in a sandboxed parser; the acknowledgment endpoint and an append-only, zero-weight evidence ledger (pulled forward from Phase 4); a labelled retrieval evaluation (54 questions) with pre-registered thresholds.
+> **Not done from this phase:** the retrieval evaluation is small and single-annotator; hybrid retrieval was not run inside the Docker images (embedding stack not built into them); Tesseract is not supported; document events are not published on a Redis Stream (not needed in a monolith).
+> **Acceptance IDs below:** P2-AT-1..6 are covered by `tests/test_async_ingestion.py`, `test_document_lifecycle.py`, `test_ocr_parsing.py`, `test_hybrid_retrieval.py`, `test_ingestion.py`; P2-AT-7 by `eval/` (no numbers asserted). Statuses `UPLOADED/PARSING/INDEXING` became `QUEUED/PROCESSING`.
+
 ### Phase 3 — Doubt resolution and orchestration (completes M1)
 - **Deliverables:** workflow engine (run claim, checkpoint, heartbeat, optimistic versioning, event application, reconciler); `understand`, `explain` agents; `decide` policy (R1–R10) as a pure function; `DecisionProvider` interface with `rules` default; `core-api` session/message/intervention modules; polling chat UI with citation panel; admin trace endpoint; budgets/timeouts/retries; prompt files and versioning.
 - **Dependencies:** Phase 2 (retrieval), Phase 1 (`FakeLLM`).
@@ -195,8 +199,9 @@ flowchart LR
 | Single Postgres instance | Logical-only isolation | Disclose; separate roles/URLs enable later split |
 | Demo-day dependency failure | Failed demo | Cached/FakeLLM mode, recorded video |
 
-## 8. Immediate next steps (after document approval)
+## 8. Immediate next steps (updated after Phase 2)
 
-1. Phase 0: assign owners and timeboxes; confirm O-1…O-7 defaults or provide values.
-2. Start Phase 1 toward **M1**, beginning with `libs/contracts`, the Compose file with db init (schemas/roles), and service skeletons with health checks.
-3. In parallel, author the Computer Networks seed corpus and draft `doubts.jsonl`/`states.jsonl` so evaluation data grows with the code.
+1. Close the Phase 2 verification gap: build the images with `INSTALL_EMBEDDINGS=true`, run `python -m app.knowledge.reindex`, and repeat the Compose checks in hybrid mode.
+2. Phase 3: replace the fake provider path with a real-provider adapter behind the existing interface (needs credentials and a budget decision, open item O-1); add the SSE/streaming option if wanted.
+3. Phase 4: graded attempts and practice generation, the Beta/decay learner model consuming `core.evidence_events`, hypothesis lifecycle, and a designed anonymization path for the append-only ledger.
+4. Replace the evaluation set with a larger, double-annotated, partly student-written one and a fresh test split before making any further threshold or model decision.

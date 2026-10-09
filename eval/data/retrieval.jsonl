@@ -1,0 +1,54 @@
+{"id":"q01","split":"dev","category":"answerable","question":"What are the three steps of the TCP handshake?","gold":[{"phrase":"three-way handshake","grade":2},{"phrase":"The server replies with a SYN-ACK segment","grade":2}]}
+{"id":"q02","split":"test","category":"answerable","question":"How does a client and server open a TCP connection?","gold":[{"phrase":"three-way handshake","grade":2},{"phrase":"The server replies with a SYN-ACK segment","grade":2}]}
+{"id":"q03","split":"dev","category":"answerable","question":"Why does slow start double the window each round trip?","gold":[{"phrase":"which roughly doubles cwnd every round-trip time","grade":2}]}
+{"id":"q04","split":"test","category":"answerable","question":"What does ssthresh do in TCP?","gold":[{"phrase":"Once cwnd reaches ssthresh, TCP switches to congestion avoidance","grade":2},{"phrase":"until cwnd reaches the slow start threshold","grade":1}]}
+{"id":"q05","split":"dev","category":"answerable","question":"When the sender sees three repeated ACKs for the same data, what does Reno do?","gold":[{"phrase":"three duplicate acknowledgments trigger fast retransmit","grade":2},{"phrase":"Fast recovery then sets ssthresh","grade":1}]}
+{"id":"q06","split":"test","category":"answerable","question":"What happens to the congestion window after a retransmission timeout?","gold":[{"phrase":"After a timeout, TCP sets ssthresh to half of the current cwnd","grade":2}]}
+{"id":"q07","split":"dev","category":"answerable","question":"What is AIMD?","gold":[{"phrase":"additive increase and multiplicative decrease is known as AIMD","grade":2}]}
+{"id":"q08","split":"test","category":"answerable","question":"Why can loss-based congestion control perform badly on wireless links?","gold":[{"phrase":"Packet loss is not always caused by congestion, for example on wireless links","grade":2}]}
+{"id":"q09","split":"dev","category":"answerable","question":"What is flow control and what does it protect?","gold":[{"phrase":"Flow control prevents a fast sender from overflowing the receive buffer","grade":2}]}
+{"id":"q10","split":"test","category":"answerable","question":"What does the sender do when the receiver advertises a zero window?","gold":[{"phrase":"advertises a window of zero and the sender pauses","grade":2},{"phrase":"small probe segments","grade":1}]}
+{"id":"q11","split":"dev","category":"answerable","question":"What is the difference between flow control and congestion control?","gold":[{"phrase":"Flow control and congestion control are different mechanisms","grade":2}]}
+{"id":"q12","split":"test","category":"answerable","question":"How many usable hosts does a /26 subnet have?","gold":[{"phrase":"62 usable host addresses","grade":2}]}
+{"id":"q13","split":"dev","category":"answerable","question":"How many subnets do you get by dividing a /24 network into /26 blocks?","gold":[{"phrase":"produces four subnets","grade":2},{"phrase":"A /26 prefix leaves 6 host bits","grade":1}]}
+{"id":"q14","split":"test","category":"answerable","question":"How does a router choose among several matching forwarding table entries?","gold":[{"phrase":"longest matching prefix","grade":2}]}
+{"id":"q15","split":"dev","category":"answerable","question":"What is the subnet mask of a /24 network?","gold":[{"phrase":"255.255.255.0","grade":2}]}
+{"id":"q16","split":"test","category":"answerable","question":"What is encapsulation?","gold":[{"phrase":"process called encapsulation","grade":2}]}
+{"id":"q17","split":"dev","category":"answerable","question":"What goes wrong with distance vector protocols when a link fails?","gold":[{"phrase":"count to infinity problem","grade":2}]}
+{"id":"q18","split":"test","category":"answerable","question":"Which algorithm do link state routers use to compute shortest paths?","gold":[{"phrase":"Dijkstra","grade":2}]}
+{"id":"q19","split":"dev","category":"answerable","question":"What is BGP?","gold":[{"phrase":"BGP, a path vector protocol","grade":2}]}
+{"id":"q20","split":"test","category":"answerable","question":"What does the HTTP 404 status code mean?","gold":[{"phrase":"404 means that the requested resource was not found","grade":2},{"phrase":"codes beginning with 4 report a client error","grade":1}]}
+{"id":"q21","split":"dev","category":"answerable","question":"How can a stateless protocol like HTTP remember a user between requests?","gold":[{"phrase":"Cookies add state","grade":2}]}
+{"id":"q22","split":"test","category":"answerable","question":"What does a recursive DNS resolver do?","gold":[{"phrase":"A client normally asks a recursive resolver","grade":2},{"phrase":"The resolver contacts the root","grade":2}]}
+{"id":"q23","split":"dev","category":"answerable","question":"Which DNS record type maps a name to an IPv6 address?","gold":[{"phrase":"AAAA records for IPv6 addresses","grade":2}]}
+{"id":"q24","split":"test","category":"answerable","question":"How long is the UDP header and what does it contain?","gold":[{"phrase":"The UDP header is only 8 bytes long","grade":2}]}
+{"id":"q25","split":"dev","category":"answerable","question":"How does an Ethernet switch learn where to send frames?","gold":[{"phrase":"A switch learns which MAC address can be reached through which port","grade":2}]}
+{"id":"q26","split":"test","category":"answerable","question":"What does ARP do?","gold":[{"phrase":"maps an IP address to a MAC address on the same network","grade":2}]}
+{"id":"q27","split":"dev","category":"answerable","question":"What are the four DHCP steps?","gold":[{"phrase":"discover, offer, request and acknowledge","grade":2}]}
+{"id":"q28","split":"test","category":"answerable","question":"How does NAT let many hosts share one public IP address?","gold":[{"phrase":"rewrites the source address and port of outgoing packets","grade":2},{"phrase":"Network Address Translation, NAT, lets many hosts","grade":2}]}
+{"id":"q29","split":"dev","category":"answerable","question":"How does TLS protect the data after the handshake finishes?","gold":[{"phrase":"protected with symmetric encryption","grade":2}]}
+{"id":"q30","split":"test","category":"answerable","question":"What is the bandwidth-delay product?","gold":[{"phrase":"bandwidth-delay product is the link bandwidth multiplied by the round-trip time","grade":2}]}
+{"id":"q31","split":"dev","category":"answerable","question":"What are the components of the delay of a packet?","gold":[{"phrase":"processing delay, queuing delay, transmission delay and propagation delay","grade":2}]}
+{"id":"q32","split":"test","category":"answerable","question":"Why does TCP retransmit a segment?","gold":[{"phrase":"If the timer expires before an acknowledgment arrives, the sender retransmits the segment","grade":2}]}
+{"id":"a01","split":"dev","category":"ambiguous","question":"How does it work?","gold":[]}
+{"id":"a02","split":"test","category":"ambiguous","question":"What does it mean?","gold":[]}
+{"id":"a03","split":"dev","category":"ambiguous","question":"Can you explain that?","gold":[]}
+{"id":"a04","split":"test","category":"ambiguous","question":"Tell me more please","gold":[]}
+{"id":"a05","split":"dev","category":"ambiguous","question":"Why is it slow?","gold":[]}
+{"id":"a06","split":"test","category":"ambiguous","question":"Is it reliable?","gold":[]}
+{"id":"o01","split":"dev","category":"out_of_corpus","question":"What is the boiling point of water at sea level?","gold":[]}
+{"id":"o02","split":"test","category":"out_of_corpus","question":"What is the derivative of x squared?","gold":[]}
+{"id":"o03","split":"dev","category":"out_of_corpus","question":"Explain how photosynthesis works in plants.","gold":[]}
+{"id":"o04","split":"test","category":"out_of_corpus","question":"How do I bake sourdough bread at home?","gold":[]}
+{"id":"o05","split":"dev","category":"out_of_corpus","question":"Who wrote the novel Pride and Prejudice?","gold":[]}
+{"id":"o06","split":"test","category":"out_of_corpus","question":"What caused the French Revolution?","gold":[]}
+{"id":"o07","split":"dev","category":"out_of_corpus","question":"How does the Linux scheduler pick the next process to run?","gold":[]}
+{"id":"o08","split":"test","category":"out_of_corpus","question":"How does a B-tree index speed up a database query?","gold":[]}
+{"id":"m01","split":"dev","category":"in_domain_missing","question":"How does QUIC achieve zero round trip connection setup?","gold":[]}
+{"id":"m02","split":"test","category":"in_domain_missing","question":"How does the TCP CUBIC window growth function work?","gold":[]}
+{"id":"m03","split":"dev","category":"in_domain_missing","question":"What is the difference between IPv4 and IPv6 header formats?","gold":[]}
+{"id":"m04","split":"test","category":"in_domain_missing","question":"How many bits are in an IPv6 address?","gold":[]}
+{"id":"m05","split":"dev","category":"in_domain_missing","question":"How does OSPF elect a designated router?","gold":[]}
+{"id":"m06","split":"test","category":"in_domain_missing","question":"How does BGP route reflection work?","gold":[]}
+{"id":"m07","split":"dev","category":"in_domain_missing","question":"What is TCP BBR congestion control?","gold":[]}
+{"id":"m08","split":"test","category":"in_domain_missing","question":"What is the Spanning Tree Protocol used for?","gold":[]}

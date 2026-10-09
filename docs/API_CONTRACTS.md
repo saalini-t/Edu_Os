@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Design. **No endpoint below is implemented yet.** JSON examples are illustrative contracts, not captured responses. |
+| **Status** | Target contracts; JSON examples are illustrative, not captured responses. Only a subset of the public endpoints exists (auth, documents incl. lifecycle, search, doubts incl. acknowledgment, evidence, admin trace/events); no `/internal/*` endpoints exist because the system is a monolith. **Section 9 below documents what Phase 2 actually implemented and overrides sections 2.2 and 5 where they differ.** **Update (2026-10-09):** the M1 vertical slice is implemented as a modular monolith; see [PHASE1_ACCEPTANCE](PHASE1_ACCEPTANCE.md) for what exists, what was verified, and deviations from this design. |
 | **Version** | 0.1 (2026-10-09) |
 | **Related** | [ARCHITECTURE](ARCHITECTURE.md) (ownership, workflow, data model), [AGENT_SPECIFICATIONS](AGENT_SPECIFICATIONS.md) (Pydantic agent schemas) |
 
@@ -428,3 +428,58 @@ Pydantic definitions for `DoubtAnalysis`, `Explanation`, `PracticeItemDraft`, `E
 - Contract tests (Phase 1 onward) assert: OpenAPI generated from FastAPI matches the models in `libs/contracts`; every state-changing endpoint rejects a missing `Idempotency-Key`; `answer_key` and `rubric` never appear in any public response; internal endpoints reject user JWTs; public endpoints reject service tokens.
 - Cross-student access tests exist for every endpoint that takes an ID.
 - Idempotency tests replay each *(idem)* endpoint with the same key (same response) and with a changed body (409).
+
+
+---
+
+## 9. Phase 2 as implemented (authoritative where it differs from sections 2.2 and 5)
+
+Everything here exists and is covered by tests; see [PHASE2_ACCEPTANCE](PHASE2_ACCEPTANCE.md).
+
+### 9.1 Documents (asynchronous by default, `INGESTION_MODE=async`)
+
+| Method & path | Behaviour |
+|---|---|
+| `POST /v1/documents` (multipart `file`, `course_id`, `title`) | Roles `student` (own course, private document) and `admin` (course-shared). **202** `QUEUED` with the document and its job; **200** if the same bytes were already uploaded by this owner in this course (no second document or job). `INGESTION_MODE=sync`: **201** only once `READY`, or **422** `INGESTION_FAILED` for an unreadable file. 413 `FILE_TOO_LARGE`, 415 `UNSUPPORTED_MEDIA_TYPE`, 403 not enrolled / teacher. |
+| `GET /v1/documents`, `GET /v1/documents/{id}` | Document with the latest job. 404 for documents the caller may not see. |
+| `PUT /v1/documents/{id}/file` (multipart `file`) | Replace the content. Owner or admin. **202**; the current version stays searchable until the new one is fully indexed. |
+| `POST /v1/documents/{id}/reindex` | Rebuild chunks from the stored file (e.g. after enabling OCR). Owner or admin. **202**. |
+| `DELETE /v1/documents/{id}` | **204**. Chunks, embeddings, jobs and every stored file version are removed in the same operation. |
+| `GET /v1/admin/documents/{id}/events` | Admin only. Lifecycle audit trail (metadata only; survives deletion). |
+
+Document object: `document_id, course_id, title, filename, status (QUEUED | PROCESSING | READY | FAILED), indexed (true only when READY), visibility, page_count, chunk_count, error_code, version, extraction, created_at, updated_at, job`.
+`extraction` (after indexing): `{ocr_engine, ocr_pages[], empty_pages[], failed_pages[{page,error}], ocr_budget_exceeded_pages[]}`.
+`job`: `{job_id, status (QUEUED | PROCESSING | DONE | FAILED), stage, attempts, max_attempts, error_code, last_error, queue ("notified" | "deferred"), created_at, finished_at}`; `deferred` means Redis could not be notified and a worker will find the job by polling.
+
+A failed *replace* or *re-index* sets `job.status = FAILED` but leaves the document `READY` and serving its previous version.
+
+Ingestion `error_code` values: `UNREADABLE_PDF, ENCRYPTED_PDF, TOO_MANY_PAGES, NO_EXTRACTABLE_TEXT, FILE_MISSING, PARSER_TIMEOUT, PARSER_CRASHED, PARSER_RESOURCE_LIMIT, DUPLICATE_CONTENT, MAX_ATTEMPTS_EXCEEDED, WORKER_LOST, DOCUMENT_MISSING`.
+Lifecycle request errors (all **409**): `DOCUMENT_NOT_READY`, `JOB_IN_PROGRESS`, `UNCHANGED_CONTENT`, `DUPLICATE_CONTENT`.
+
+### 9.2 Search
+
+`GET /v1/search?q=&course_id=&top_k=` returns `{query, method, n_above_threshold, min_terms, results[{chunk_id, document_id, document_title, course_id, page, text, rank, matched_terms}]}`.
+`method` is `postgres_fts`, `hybrid_rrf` or `dense`. Hybrid retrieval, semantic scores and fallbacks are reported in the **admin trace**, not the public search response. Only `READY` documents and active versions are searched; access control is applied in SQL before ranking.
+
+### 9.3 Acknowledgment and evidence
+
+| Method & path | Behaviour |
+|---|---|
+| `POST /v1/doubts/{session_id}/ack` | Body `{"ack": "understood" \| "still_confused" \| "check_me"}` (no other fields). Student only; `Idempotency-Key` required. **202** `{run_id, status, ack, mastery_credit: 0.0}`. 404 for another student's session, 403 for other roles, 409 `INVALID_RUN_STATE` unless the run is waiting for an acknowledgment, 409 `IDEMPOTENCY_KEY_REUSED`, 409 `DUPLICATE_ACK`, 422 for an invalid value. A repeated delivery with the same key replays the first response and applies nothing. |
+| `GET /v1/learners/me/evidence` | Student's own ledger rows `{id, evidence_type, weight, topic_id, source_run_id, provenance, created_at}` plus a note. |
+| `GET /v1/admin/learners/{student_id}/evidence` | Admin read. |
+
+Evidence types today: `self_report_understood`, `self_report_confused`, `check_requested`, all with **weight 0** (enforced in code and by database constraints). The ledger is append-only (database trigger).
+An acknowledgment never changes mastery. After `understood` / `check_me` the policy selects practice, which does not exist yet, so the run completes with `outcome = "UNVERIFIED"` and the intervention `{practice: {available: false}, message, outcome}`.
+
+### 9.4 Admin trace additions
+
+`retrieval[]` entries now include `mode: {requested, used, fallback_reason, degraded, missing_embeddings, embedding_model, min_sim}`, and each result has `dense_similarity`, `fused_score` and `sources` (`["fts"]`, `["dense"]` or both). `used` reports what actually ran; a requested hybrid search that degraded to full text says so and why (`embeddings_not_configured`, `pgvector_unavailable`, `no_active_embedding_model`, `embedding_model_mismatch`, `dense_error`, `empty_query`).
+
+### 9.5 Readiness
+
+`GET /readyz` adds an informational `retrieval` object (`configured_mode, embedding_provider, pgvector, effective_mode, fallback_reason, embedding_model, dims, missing_embeddings`). It does not affect the ready/not-ready decision.
+
+### 9.6 Not implemented
+
+The `/internal/*` endpoints and Redis Stream events of sections 3–6 do not exist (monolith). Practice, attempts, grading, teacher/escalation endpoints, `request-teacher` resume and learner progress are still future work.

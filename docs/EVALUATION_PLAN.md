@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Design. **No dataset, harness or result exists yet.** No performance numbers are stated or implied anywhere in this document; thresholds are chosen by the team before running and recorded in the report. |
+| **Status** | Design (sections 1–10) plus an **implemented retrieval/citation/insufficient-context evaluation (section 11)**. Everything else in this plan (explanation quality, assessment, teacher matching, learner model, Jev experiment, fault injection beyond what the test suite covers) is **not implemented**. Numbers appear only in section 11 and in the saved reports. |
 | **Version** | 0.1 (2026-10-09) |
 | **Related** | [ARCHITECTURE](ARCHITECTURE.md), [AGENT_SPECIFICATIONS](AGENT_SPECIFICATIONS.md), [IMPLEMENTATION_PLAN](IMPLEMENTATION_PLAN.md) |
 
@@ -177,3 +177,37 @@ What would be needed, and what we will say instead:
 ## 10. Reporting
 
 `make eval` writes `eval/reports/<timestamp>/report.md` + CSV/JSON: dataset versions, git commit, config snapshot (thresholds, budgets), model/provider identifiers (including `fake` when applicable — runs with `FakeLLM` are stamped "harness-only"), per-section metrics with n and CIs, threshold pass/fail, failure examples. A report is the only source of any number quoted in the demo.
+
+
+---
+
+## 11. What exists after Phase 2 (implemented; supersedes the planned sizes in section 2 for these datasets)
+
+### 11.1 Assets
+| Asset | Reality |
+|---|---|
+| `eval/data/retrieval.jsonl` | **54** questions: 32 `answerable`, 6 `ambiguous`, 8 `out_of_corpus`, 8 `in_domain_missing`; **27 dev / 27 test**, stratified by category. Labels are evidence **phrases** (graded 2/1) resolved to chunks at run time; the loader fails if a phrase matches nothing. One author, no double annotation. |
+| Corpus | The 6-page demo PDF + a 7-page **synthetic** supplement (`eval/data/corpus/`), 25 chunks. Original text written for EduOS. |
+| `backend/app/evaluation/` | `dataset.py` (validation, leakage and stratification checks), `metrics.py` (Recall@k, HitRate@k, MRR, nDCG@k, seeded bootstrap CIs), `retrieval_eval.py` (runner + dev-only threshold sweep + reports), `harness.py` (disposable database from the real migrations). 8 unit tests. |
+| Reports | `eval/reports/<timestamp>-<label>/report.{json,md}` with metrics, CIs, failure cases and per-question rows. |
+| `eval/THRESHOLDS.md` | Pre-registered selection procedure (written before the first sweep), run log, selected values, and corrections. |
+
+### 11.2 Metrics implemented
+Ranking on answerable questions: Recall@3/6, HitRate@3/6, nDCG@3/6 (graded), MRR, each with n and a 95% bootstrap CI. **Support / insufficient context** (retrieval level): share of answerable questions supported (TPR) and of out-of-corpus + in-domain-missing questions falsely supported (FPR), Youden's J, and the rate per category. **Workflow level (fake provider):** answerable answered with a citation; citation **precision** (emitted citations whose chunk contains the gold evidence); unanswerable answered with a citation; ambiguous questions that got a clarification; whether every emitted citation passed verification.
+Not implemented from section 3: classification accuracy, explanation quality, practice/assessment correctness, teacher matching, learner-model simulations, latency percentiles.
+
+### 11.3 Protocol actually followed
+Dev/test split fixed before tuning; threshold procedure pre-registered; sweeps restricted to dev by an assertion in code; embedding model chosen from a dev-only spike by a pre-registered rule; RRF constants fixed a priori. **Deviations to be aware of:** the test split was evaluated many times for reporting (count in `eval/THRESHOLDS.md`), so it is no longer a clean hold-out; and an implementation defect (random tie-breaking) made early ranking numbers non-reproducible, which was fixed and the reports superseded.
+
+### 11.4 Results
+See [PHASE2_ACCEPTANCE §4](PHASE2_ACCEPTANCE.md) for the table (generated from `eval/reports/*det-final-*`). Summary: full-text, dense and hybrid retrieval are **statistically indistinguishable on ranking** at this sample size; hybrid with the dev-selected thresholds supports all answerable questions in both splits (TPR 1.0 vs 0.875) at the cost of one falsely supported hard negative on dev; citation precision is 0.59–0.74.
+
+### 11.5 Running it
+```bash
+EVAL_DATABASE_URL=postgresql+psycopg2://USER:PASS@HOST:PORT/eduos_eval_test   python -m app.evaluation.retrieval_eval --mode fts|dense|hybrid --splits dev test   --min-terms 4 --min-chunks 1 [--min-sim 0.6 --embedding-provider sentence_transformers] --workflow --label NAME
+# add --sweep --sim-grid 0.30 0.35 ... (dev split only) to repeat the threshold selection
+```
+The database must be disposable (name contains `test` or `eval`); the run drops and rebuilds its schemas. Dense/hybrid need `pip install -r requirements-embeddings.txt` and a PostgreSQL with pgvector (`docker compose -f docker-compose.test.yml up -d`).
+
+### 11.6 What would make this evaluation trustworthy
+A larger, double-annotated set including student-written questions and noisy material; a fresh untouched test split; a real LLM so workflow-level numbers mean something; human-rated citation *support* (not just existence); and the Phase 6 items in sections 3–10.

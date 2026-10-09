@@ -1,0 +1,1511 @@
+{
+ "label": "det-fts-dev-sweep",
+ "generated_at": "2026-10-09T02:52:03+00:00",
+ "git_commit": "af1c6fb+worktree",
+ "mode": "fts",
+ "dataset": "retrieval.jsonl",
+ "n_questions": 54,
+ "n_chunks": 25,
+ "thresholds": {
+  "min_terms": 2,
+  "min_chunks": 1,
+  "min_sim": null
+ },
+ "embedding": null,
+ "splits": {
+  "dev": {
+   "ranking": {
+    "n_answerable": 16,
+    "recall@3": {
+     "n": 16,
+     "mean": 0.9688,
+     "ci95": [
+      0.9062,
+      1.0
+     ]
+    },
+    "hit@3": {
+     "n": 16,
+     "mean": 1.0,
+     "ci95": [
+      1.0,
+      1.0
+     ]
+    },
+    "ndcg@3": {
+     "n": 16,
+     "mean": 0.9388,
+     "ci95": [
+      0.8477,
+      1.0
+     ]
+    },
+    "recall@6": {
+     "n": 16,
+     "mean": 0.9688,
+     "ci95": [
+      0.9062,
+      1.0
+     ]
+    },
+    "hit@6": {
+     "n": 16,
+     "mean": 1.0,
+     "ci95": [
+      1.0,
+      1.0
+     ]
+    },
+    "ndcg@6": {
+     "n": 16,
+     "mean": 0.9388,
+     "ci95": [
+      0.8477,
+      1.0
+     ]
+    },
+    "mrr": {
+     "n": 16,
+     "mean": 0.9271,
+     "ci95": [
+      0.8229,
+      1.0
+     ]
+    }
+   },
+   "support": {
+    "min_terms": 2,
+    "min_chunks": 1,
+    "min_sim": null,
+    "tpr_answerable_supported": {
+     "n": 16,
+     "mean": 1.0,
+     "ci95": [
+      1.0,
+      1.0
+     ]
+    },
+    "fpr_unanswerable_supported": {
+     "n": 8,
+     "mean": 0.625,
+     "ci95": [
+      0.25,
+      0.875
+     ]
+    },
+    "youden_j": 0.375,
+    "supported_rate_by_category": {
+     "answerable": {
+      "n": 16,
+      "mean": 1.0,
+      "ci95": [
+       1.0,
+       1.0
+      ]
+     },
+     "out_of_corpus": {
+      "n": 4,
+      "mean": 0.25,
+      "ci95": [
+       0.0,
+       0.75
+      ]
+     },
+     "in_domain_missing": {
+      "n": 4,
+      "mean": 1.0,
+      "ci95": [
+       1.0,
+       1.0
+      ]
+     },
+     "ambiguous": {
+      "n": 3,
+      "mean": 0.3333,
+      "ci95": [
+       0.0,
+       1.0
+      ]
+     }
+    }
+   },
+   "failures": {
+    "answerable_missed": [],
+    "answerable_relevant_not_first": [
+     {
+      "id": "q05",
+      "question": "When the sender sees three repeated ACKs for the same data, what does Reno do?",
+      "first_relevant_rank": 2
+     },
+     {
+      "id": "q13",
+      "question": "How many subnets do you get by dividing a /24 network into /26 blocks?",
+      "first_relevant_rank": 3
+     }
+    ],
+    "unanswerable_falsely_supported": [
+     {
+      "id": "o07",
+      "category": "out_of_corpus",
+      "question": "How does the Linux scheduler pick the next process to run?",
+      "top_matched_terms": [
+       2,
+       1,
+       1
+      ]
+     },
+     {
+      "id": "m01",
+      "category": "in_domain_missing",
+      "question": "How does QUIC achieve zero round trip connection setup?",
+      "top_matched_terms": [
+       3,
+       3,
+       2
+      ]
+     },
+     {
+      "id": "m03",
+      "category": "in_domain_missing",
+      "question": "What is the difference between IPv4 and IPv6 header formats?",
+      "top_matched_terms": [
+       2,
+       2,
+       1
+      ]
+     },
+     {
+      "id": "m05",
+      "category": "in_domain_missing",
+      "question": "How does OSPF elect a designated router?",
+      "top_matched_terms": [
+       2,
+       1,
+       1
+      ]
+     },
+     {
+      "id": "m07",
+      "category": "in_domain_missing",
+      "question": "What is TCP BBR congestion control?",
+      "top_matched_terms": [
+       3,
+       3,
+       3
+      ]
+     }
+    ]
+   },
+   "mode_used": [
+    "fts"
+   ],
+   "records": [
+    {
+     "id": "q01",
+     "split": "dev",
+     "category": "answerable",
+     "question": "What are the three steps of the TCP handshake?",
+     "mode_used": "fts",
+     "n_terms": 4,
+     "ranked": [
+      {
+       "chunk_id": "0670dd43-b0ec-473c-b81b-27356f56dc1c",
+       "matched_terms": 3,
+       "dense": null,
+       "grade": 2,
+       "page": 2
+      },
+      {
+       "chunk_id": "ac3579cb-bbbd-42e6-a734-138d0100a7ef",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "7ec69fec-5aa7-4050-8b2e-19d1ea632112",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 6
+      },
+      {
+       "chunk_id": "a11d0913-f943-42bb-a104-c14f192dfa20",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      },
+      {
+       "chunk_id": "d7f5a1c9-dd71-4186-a269-5478ab11c609",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "646ebc0c-cf3e-4af4-b887-b1a7b1389811",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      }
+     ],
+     "gold_grades": {
+      "0670dd43-b0ec-473c-b81b-27356f56dc1c": 2
+     }
+    },
+    {
+     "id": "q03",
+     "split": "dev",
+     "category": "answerable",
+     "question": "Why does slow start double the window each round trip?",
+     "mode_used": "fts",
+     "n_terms": 6,
+     "ranked": [
+      {
+       "chunk_id": "d7f5a1c9-dd71-4186-a269-5478ab11c609",
+       "matched_terms": 6,
+       "dense": null,
+       "grade": 2,
+       "page": 4
+      },
+      {
+       "chunk_id": "ac3579cb-bbbd-42e6-a734-138d0100a7ef",
+       "matched_terms": 6,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "6d92bdf1-f7f6-40c3-813f-9a22e4a6a13a",
+       "matched_terms": 3,
+       "dense": null,
+       "grade": 0,
+       "page": 2
+      },
+      {
+       "chunk_id": "0bb6de1d-75aa-4bcc-9f99-de75910b7a37",
+       "matched_terms": 3,
+       "dense": null,
+       "grade": 0,
+       "page": 7
+      },
+      {
+       "chunk_id": "808656e6-bf8b-4824-a242-37717c1d22b0",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 3
+      },
+      {
+       "chunk_id": "ff0154f5-e77c-4b08-994d-7dc30010662a",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      }
+     ],
+     "gold_grades": {
+      "d7f5a1c9-dd71-4186-a269-5478ab11c609": 2
+     }
+    },
+    {
+     "id": "q05",
+     "split": "dev",
+     "category": "answerable",
+     "question": "When the sender sees three repeated ACKs for the same data, what does Reno do?",
+     "mode_used": "fts",
+     "n_terms": 7,
+     "ranked": [
+      {
+       "chunk_id": "0670dd43-b0ec-473c-b81b-27356f56dc1c",
+       "matched_terms": 4,
+       "dense": null,
+       "grade": 0,
+       "page": 2
+      },
+      {
+       "chunk_id": "ac3579cb-bbbd-42e6-a734-138d0100a7ef",
+       "matched_terms": 3,
+       "dense": null,
+       "grade": 2,
+       "page": 4
+      },
+      {
+       "chunk_id": "d7f5a1c9-dd71-4186-a269-5478ab11c609",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "808656e6-bf8b-4824-a242-37717c1d22b0",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 3
+      },
+      {
+       "chunk_id": "6d92bdf1-f7f6-40c3-813f-9a22e4a6a13a",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 2
+      },
+      {
+       "chunk_id": "0bb6de1d-75aa-4bcc-9f99-de75910b7a37",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 7
+      }
+     ],
+     "gold_grades": {
+      "ac3579cb-bbbd-42e6-a734-138d0100a7ef": 2,
+      "ff0154f5-e77c-4b08-994d-7dc30010662a": 1
+     }
+    },
+    {
+     "id": "q07",
+     "split": "dev",
+     "category": "answerable",
+     "question": "What is AIMD?",
+     "mode_used": "fts",
+     "n_terms": 1,
+     "ranked": [
+      {
+       "chunk_id": "ff0154f5-e77c-4b08-994d-7dc30010662a",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 2,
+       "page": 4
+      }
+     ],
+     "gold_grades": {
+      "ff0154f5-e77c-4b08-994d-7dc30010662a": 2
+     }
+    },
+    {
+     "id": "q09",
+     "split": "dev",
+     "category": "answerable",
+     "question": "What is flow control and what does it protect?",
+     "mode_used": "fts",
+     "n_terms": 3,
+     "ranked": [
+      {
+       "chunk_id": "808656e6-bf8b-4824-a242-37717c1d22b0",
+       "matched_terms": 3,
+       "dense": null,
+       "grade": 2,
+       "page": 3
+      },
+      {
+       "chunk_id": "9d54255d-3250-4c85-ab65-0be33d5ad5c0",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 3
+      },
+      {
+       "chunk_id": "ff0154f5-e77c-4b08-994d-7dc30010662a",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "d7f5a1c9-dd71-4186-a269-5478ab11c609",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "19818e93-245f-4ef9-9651-5013c17b0940",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 3
+      },
+      {
+       "chunk_id": "7ec69fec-5aa7-4050-8b2e-19d1ea632112",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 6
+      }
+     ],
+     "gold_grades": {
+      "808656e6-bf8b-4824-a242-37717c1d22b0": 2
+     }
+    },
+    {
+     "id": "q11",
+     "split": "dev",
+     "category": "answerable",
+     "question": "What is the difference between flow control and congestion control?",
+     "mode_used": "fts",
+     "n_terms": 4,
+     "ranked": [
+      {
+       "chunk_id": "9d54255d-3250-4c85-ab65-0be33d5ad5c0",
+       "matched_terms": 4,
+       "dense": null,
+       "grade": 2,
+       "page": 3
+      },
+      {
+       "chunk_id": "808656e6-bf8b-4824-a242-37717c1d22b0",
+       "matched_terms": 4,
+       "dense": null,
+       "grade": 2,
+       "page": 3
+      },
+      {
+       "chunk_id": "ff0154f5-e77c-4b08-994d-7dc30010662a",
+       "matched_terms": 3,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "d7f5a1c9-dd71-4186-a269-5478ab11c609",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "19818e93-245f-4ef9-9651-5013c17b0940",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 3
+      },
+      {
+       "chunk_id": "ac3579cb-bbbd-42e6-a734-138d0100a7ef",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      }
+     ],
+     "gold_grades": {
+      "808656e6-bf8b-4824-a242-37717c1d22b0": 2,
+      "9d54255d-3250-4c85-ab65-0be33d5ad5c0": 2
+     }
+    },
+    {
+     "id": "q13",
+     "split": "dev",
+     "category": "answerable",
+     "question": "How many subnets do you get by dividing a /24 network into /26 blocks?",
+     "mode_used": "fts",
+     "n_terms": 8,
+     "ranked": [
+      {
+       "chunk_id": "116e15d5-9c0c-48bd-a95e-9797146cdec5",
+       "matched_terms": 3,
+       "dense": null,
+       "grade": 0,
+       "page": 5
+      },
+      {
+       "chunk_id": "6d78b183-8122-41be-8cc1-9b91b328060f",
+       "matched_terms": 3,
+       "dense": null,
+       "grade": 0,
+       "page": 5
+      },
+      {
+       "chunk_id": "4c370101-00b3-40e1-8f0a-2bffbb3442c2",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 2,
+       "page": 5
+      },
+      {
+       "chunk_id": "646ebc0c-cf3e-4af4-b887-b1a7b1389811",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      },
+      {
+       "chunk_id": "894750a0-80b7-47ac-b2ab-d6e3a27b5659",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      },
+      {
+       "chunk_id": "c6eecb71-5dc5-47f1-ab17-fac6e484d8d7",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      }
+     ],
+     "gold_grades": {
+      "4c370101-00b3-40e1-8f0a-2bffbb3442c2": 2
+     }
+    },
+    {
+     "id": "q15",
+     "split": "dev",
+     "category": "answerable",
+     "question": "What is the subnet mask of a /24 network?",
+     "mode_used": "fts",
+     "n_terms": 4,
+     "ranked": [
+      {
+       "chunk_id": "116e15d5-9c0c-48bd-a95e-9797146cdec5",
+       "matched_terms": 4,
+       "dense": null,
+       "grade": 2,
+       "page": 5
+      },
+      {
+       "chunk_id": "6d78b183-8122-41be-8cc1-9b91b328060f",
+       "matched_terms": 3,
+       "dense": null,
+       "grade": 0,
+       "page": 5
+      },
+      {
+       "chunk_id": "4c370101-00b3-40e1-8f0a-2bffbb3442c2",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 5
+      },
+      {
+       "chunk_id": "646ebc0c-cf3e-4af4-b887-b1a7b1389811",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      },
+      {
+       "chunk_id": "894750a0-80b7-47ac-b2ab-d6e3a27b5659",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      },
+      {
+       "chunk_id": "c6eecb71-5dc5-47f1-ab17-fac6e484d8d7",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      }
+     ],
+     "gold_grades": {
+      "116e15d5-9c0c-48bd-a95e-9797146cdec5": 2
+     }
+    },
+    {
+     "id": "q17",
+     "split": "dev",
+     "category": "answerable",
+     "question": "What goes wrong with distance vector protocols when a link fails?",
+     "mode_used": "fts",
+     "n_terms": 7,
+     "ranked": [
+      {
+       "chunk_id": "187b4515-1043-49d1-923a-602351832966",
+       "matched_terms": 5,
+       "dense": null,
+       "grade": 2,
+       "page": 6
+      },
+      {
+       "chunk_id": "f4690d0c-5720-40f7-b942-0147b7f7ae47",
+       "matched_terms": 3,
+       "dense": null,
+       "grade": 0,
+       "page": 6
+      },
+      {
+       "chunk_id": "894750a0-80b7-47ac-b2ab-d6e3a27b5659",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      },
+      {
+       "chunk_id": "c6eecb71-5dc5-47f1-ab17-fac6e484d8d7",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "f32bf6ec-31e7-4542-8d45-8fd8519f2a20",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 7
+      },
+      {
+       "chunk_id": "646ebc0c-cf3e-4af4-b887-b1a7b1389811",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      }
+     ],
+     "gold_grades": {
+      "187b4515-1043-49d1-923a-602351832966": 2
+     }
+    },
+    {
+     "id": "q19",
+     "split": "dev",
+     "category": "answerable",
+     "question": "What is BGP?",
+     "mode_used": "fts",
+     "n_terms": 1,
+     "ranked": [
+      {
+       "chunk_id": "f4690d0c-5720-40f7-b942-0147b7f7ae47",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 2,
+       "page": 6
+      }
+     ],
+     "gold_grades": {
+      "f4690d0c-5720-40f7-b942-0147b7f7ae47": 2
+     }
+    },
+    {
+     "id": "q21",
+     "split": "dev",
+     "category": "answerable",
+     "question": "How can a stateless protocol like HTTP remember a user between requests?",
+     "mode_used": "fts",
+     "n_terms": 7,
+     "ranked": [
+      {
+       "chunk_id": "a11d0913-f943-42bb-a104-c14f192dfa20",
+       "matched_terms": 4,
+       "dense": null,
+       "grade": 2,
+       "page": 1
+      },
+      {
+       "chunk_id": "0c3cde59-058e-4409-a89e-8731affe1c9a",
+       "matched_terms": 3,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      },
+      {
+       "chunk_id": "a70846a3-d60d-4994-8a55-fe86bdbc7c38",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "6d78b183-8122-41be-8cc1-9b91b328060f",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 5
+      },
+      {
+       "chunk_id": "894750a0-80b7-47ac-b2ab-d6e3a27b5659",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      },
+      {
+       "chunk_id": "187b4515-1043-49d1-923a-602351832966",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 6
+      }
+     ],
+     "gold_grades": {
+      "a11d0913-f943-42bb-a104-c14f192dfa20": 2
+     }
+    },
+    {
+     "id": "q23",
+     "split": "dev",
+     "category": "answerable",
+     "question": "Which DNS record type maps a name to an IPv6 address?",
+     "mode_used": "fts",
+     "n_terms": 7,
+     "ranked": [
+      {
+       "chunk_id": "6a4bc054-b0be-4bbe-9de6-a368ec87683e",
+       "matched_terms": 6,
+       "dense": null,
+       "grade": 2,
+       "page": 2
+      },
+      {
+       "chunk_id": "6d78b183-8122-41be-8cc1-9b91b328060f",
+       "matched_terms": 4,
+       "dense": null,
+       "grade": 0,
+       "page": 5
+      },
+      {
+       "chunk_id": "55ac8656-3814-4f16-b64b-b2fb276be4b3",
+       "matched_terms": 4,
+       "dense": null,
+       "grade": 0,
+       "page": 2
+      },
+      {
+       "chunk_id": "c6eecb71-5dc5-47f1-ab17-fac6e484d8d7",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "a70846a3-d60d-4994-8a55-fe86bdbc7c38",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "b9df19ec-a4be-4886-ab52-213a5362c029",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 3
+      }
+     ],
+     "gold_grades": {
+      "6a4bc054-b0be-4bbe-9de6-a368ec87683e": 2
+     }
+    },
+    {
+     "id": "q25",
+     "split": "dev",
+     "category": "answerable",
+     "question": "How does an Ethernet switch learn where to send frames?",
+     "mode_used": "fts",
+     "n_terms": 5,
+     "ranked": [
+      {
+       "chunk_id": "c6eecb71-5dc5-47f1-ab17-fac6e484d8d7",
+       "matched_terms": 4,
+       "dense": null,
+       "grade": 2,
+       "page": 4
+      },
+      {
+       "chunk_id": "646ebc0c-cf3e-4af4-b887-b1a7b1389811",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      },
+      {
+       "chunk_id": "808656e6-bf8b-4824-a242-37717c1d22b0",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 3
+      },
+      {
+       "chunk_id": "0670dd43-b0ec-473c-b81b-27356f56dc1c",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 2
+      },
+      {
+       "chunk_id": "894750a0-80b7-47ac-b2ab-d6e3a27b5659",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      },
+      {
+       "chunk_id": "ac3579cb-bbbd-42e6-a734-138d0100a7ef",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      }
+     ],
+     "gold_grades": {
+      "c6eecb71-5dc5-47f1-ab17-fac6e484d8d7": 2
+     }
+    },
+    {
+     "id": "q27",
+     "split": "dev",
+     "category": "answerable",
+     "question": "What are the four DHCP steps?",
+     "mode_used": "fts",
+     "n_terms": 3,
+     "ranked": [
+      {
+       "chunk_id": "6d78b183-8122-41be-8cc1-9b91b328060f",
+       "matched_terms": 3,
+       "dense": null,
+       "grade": 2,
+       "page": 5
+      },
+      {
+       "chunk_id": "116e15d5-9c0c-48bd-a95e-9797146cdec5",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 5
+      },
+      {
+       "chunk_id": "4c370101-00b3-40e1-8f0a-2bffbb3442c2",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 5
+      },
+      {
+       "chunk_id": "b9df19ec-a4be-4886-ab52-213a5362c029",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 3
+      },
+      {
+       "chunk_id": "f32bf6ec-31e7-4542-8d45-8fd8519f2a20",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 7
+      }
+     ],
+     "gold_grades": {
+      "6d78b183-8122-41be-8cc1-9b91b328060f": 2
+     }
+    },
+    {
+     "id": "q29",
+     "split": "dev",
+     "category": "answerable",
+     "question": "How does TLS protect the data after the handshake finishes?",
+     "mode_used": "fts",
+     "n_terms": 5,
+     "ranked": [
+      {
+       "chunk_id": "7ec69fec-5aa7-4050-8b2e-19d1ea632112",
+       "matched_terms": 4,
+       "dense": null,
+       "grade": 2,
+       "page": 6
+      },
+      {
+       "chunk_id": "0670dd43-b0ec-473c-b81b-27356f56dc1c",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 2
+      },
+      {
+       "chunk_id": "808656e6-bf8b-4824-a242-37717c1d22b0",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 3
+      },
+      {
+       "chunk_id": "d7f5a1c9-dd71-4186-a269-5478ab11c609",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "894750a0-80b7-47ac-b2ab-d6e3a27b5659",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      },
+      {
+       "chunk_id": "6d92bdf1-f7f6-40c3-813f-9a22e4a6a13a",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 2
+      }
+     ],
+     "gold_grades": {
+      "7ec69fec-5aa7-4050-8b2e-19d1ea632112": 2
+     }
+    },
+    {
+     "id": "q31",
+     "split": "dev",
+     "category": "answerable",
+     "question": "What are the components of the delay of a packet?",
+     "mode_used": "fts",
+     "n_terms": 3,
+     "ranked": [
+      {
+       "chunk_id": "f32bf6ec-31e7-4542-8d45-8fd8519f2a20",
+       "matched_terms": 3,
+       "dense": null,
+       "grade": 2,
+       "page": 7
+      },
+      {
+       "chunk_id": "646ebc0c-cf3e-4af4-b887-b1a7b1389811",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      },
+      {
+       "chunk_id": "187b4515-1043-49d1-923a-602351832966",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 6
+      },
+      {
+       "chunk_id": "894750a0-80b7-47ac-b2ab-d6e3a27b5659",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      },
+      {
+       "chunk_id": "ac3579cb-bbbd-42e6-a734-138d0100a7ef",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "ff0154f5-e77c-4b08-994d-7dc30010662a",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      }
+     ],
+     "gold_grades": {
+      "f32bf6ec-31e7-4542-8d45-8fd8519f2a20": 2
+     }
+    },
+    {
+     "id": "a01",
+     "split": "dev",
+     "category": "ambiguous",
+     "question": "How does it work?",
+     "mode_used": "fts",
+     "n_terms": 1,
+     "ranked": [],
+     "gold_grades": {}
+    },
+    {
+     "id": "a03",
+     "split": "dev",
+     "category": "ambiguous",
+     "question": "Can you explain that?",
+     "mode_used": "fts",
+     "n_terms": 1,
+     "ranked": [],
+     "gold_grades": {}
+    },
+    {
+     "id": "a05",
+     "split": "dev",
+     "category": "ambiguous",
+     "question": "Why is it slow?",
+     "mode_used": "fts",
+     "n_terms": 1,
+     "ranked": [
+      {
+       "chunk_id": "d7f5a1c9-dd71-4186-a269-5478ab11c609",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "ac3579cb-bbbd-42e6-a734-138d0100a7ef",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "808656e6-bf8b-4824-a242-37717c1d22b0",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 3
+      },
+      {
+       "chunk_id": "ff0154f5-e77c-4b08-994d-7dc30010662a",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      }
+     ],
+     "gold_grades": {}
+    },
+    {
+     "id": "o01",
+     "split": "dev",
+     "category": "out_of_corpus",
+     "question": "What is the boiling point of water at sea level?",
+     "mode_used": "fts",
+     "n_terms": 5,
+     "ranked": [
+      {
+       "chunk_id": "55ac8656-3814-4f16-b64b-b2fb276be4b3",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 2
+      }
+     ],
+     "gold_grades": {}
+    },
+    {
+     "id": "o03",
+     "split": "dev",
+     "category": "out_of_corpus",
+     "question": "Explain how photosynthesis works in plants.",
+     "mode_used": "fts",
+     "n_terms": 4,
+     "ranked": [],
+     "gold_grades": {}
+    },
+    {
+     "id": "o05",
+     "split": "dev",
+     "category": "out_of_corpus",
+     "question": "Who wrote the novel Pride and Prejudice?",
+     "mode_used": "fts",
+     "n_terms": 4,
+     "ranked": [],
+     "gold_grades": {}
+    },
+    {
+     "id": "o07",
+     "split": "dev",
+     "category": "out_of_corpus",
+     "question": "How does the Linux scheduler pick the next process to run?",
+     "mode_used": "fts",
+     "n_terms": 6,
+     "ranked": [
+      {
+       "chunk_id": "187b4515-1043-49d1-923a-602351832966",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 6
+      },
+      {
+       "chunk_id": "894750a0-80b7-47ac-b2ab-d6e3a27b5659",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      },
+      {
+       "chunk_id": "646ebc0c-cf3e-4af4-b887-b1a7b1389811",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      },
+      {
+       "chunk_id": "0670dd43-b0ec-473c-b81b-27356f56dc1c",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 2
+      },
+      {
+       "chunk_id": "4c370101-00b3-40e1-8f0a-2bffbb3442c2",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 5
+      },
+      {
+       "chunk_id": "0c3cde59-058e-4409-a89e-8731affe1c9a",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      }
+     ],
+     "gold_grades": {}
+    },
+    {
+     "id": "m01",
+     "split": "dev",
+     "category": "in_domain_missing",
+     "question": "How does QUIC achieve zero round trip connection setup?",
+     "mode_used": "fts",
+     "n_terms": 7,
+     "ranked": [
+      {
+       "chunk_id": "6d92bdf1-f7f6-40c3-813f-9a22e4a6a13a",
+       "matched_terms": 3,
+       "dense": null,
+       "grade": 0,
+       "page": 2
+      },
+      {
+       "chunk_id": "d7f5a1c9-dd71-4186-a269-5478ab11c609",
+       "matched_terms": 3,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "ac3579cb-bbbd-42e6-a734-138d0100a7ef",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "f32bf6ec-31e7-4542-8d45-8fd8519f2a20",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 7
+      },
+      {
+       "chunk_id": "0bb6de1d-75aa-4bcc-9f99-de75910b7a37",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 7
+      },
+      {
+       "chunk_id": "0670dd43-b0ec-473c-b81b-27356f56dc1c",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 2
+      }
+     ],
+     "gold_grades": {}
+    },
+    {
+     "id": "m03",
+     "split": "dev",
+     "category": "in_domain_missing",
+     "question": "What is the difference between IPv4 and IPv6 header formats?",
+     "mode_used": "fts",
+     "n_terms": 5,
+     "ranked": [
+      {
+       "chunk_id": "646ebc0c-cf3e-4af4-b887-b1a7b1389811",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      },
+      {
+       "chunk_id": "6a4bc054-b0be-4bbe-9de6-a368ec87683e",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 2
+      },
+      {
+       "chunk_id": "894750a0-80b7-47ac-b2ab-d6e3a27b5659",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      },
+      {
+       "chunk_id": "0c3cde59-058e-4409-a89e-8731affe1c9a",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      },
+      {
+       "chunk_id": "808656e6-bf8b-4824-a242-37717c1d22b0",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 3
+      },
+      {
+       "chunk_id": "9d54255d-3250-4c85-ab65-0be33d5ad5c0",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 3
+      }
+     ],
+     "gold_grades": {}
+    },
+    {
+     "id": "m05",
+     "split": "dev",
+     "category": "in_domain_missing",
+     "question": "How does OSPF elect a designated router?",
+     "mode_used": "fts",
+     "n_terms": 4,
+     "ranked": [
+      {
+       "chunk_id": "f4690d0c-5720-40f7-b942-0147b7f7ae47",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 6
+      },
+      {
+       "chunk_id": "187b4515-1043-49d1-923a-602351832966",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 6
+      },
+      {
+       "chunk_id": "6d78b183-8122-41be-8cc1-9b91b328060f",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 5
+      },
+      {
+       "chunk_id": "f32bf6ec-31e7-4542-8d45-8fd8519f2a20",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 7
+      },
+      {
+       "chunk_id": "894750a0-80b7-47ac-b2ab-d6e3a27b5659",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      },
+      {
+       "chunk_id": "646ebc0c-cf3e-4af4-b887-b1a7b1389811",
+       "matched_terms": 1,
+       "dense": null,
+       "grade": 0,
+       "page": 1
+      }
+     ],
+     "gold_grades": {}
+    },
+    {
+     "id": "m07",
+     "split": "dev",
+     "category": "in_domain_missing",
+     "question": "What is TCP BBR congestion control?",
+     "mode_used": "fts",
+     "n_terms": 4,
+     "ranked": [
+      {
+       "chunk_id": "d7f5a1c9-dd71-4186-a269-5478ab11c609",
+       "matched_terms": 3,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "9d54255d-3250-4c85-ab65-0be33d5ad5c0",
+       "matched_terms": 3,
+       "dense": null,
+       "grade": 0,
+       "page": 3
+      },
+      {
+       "chunk_id": "808656e6-bf8b-4824-a242-37717c1d22b0",
+       "matched_terms": 3,
+       "dense": null,
+       "grade": 0,
+       "page": 3
+      },
+      {
+       "chunk_id": "ff0154f5-e77c-4b08-994d-7dc30010662a",
+       "matched_terms": 3,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "ac3579cb-bbbd-42e6-a734-138d0100a7ef",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 4
+      },
+      {
+       "chunk_id": "19818e93-245f-4ef9-9651-5013c17b0940",
+       "matched_terms": 2,
+       "dense": null,
+       "grade": 0,
+       "page": 3
+      }
+     ],
+     "gold_grades": {}
+    }
+   ]
+  }
+ },
+ "limitations": [
+  "Small corpus (tens of chunks); many candidates are trivially separable and metrics saturate easily.",
+  "Labels written by a single author, not double-annotated; evidence phrases favour lexical overlap with the questions.",
+  "Dev/test samples are small (see n); confidence intervals are wide, differences smaller than the CI are not evidence of improvement.",
+  "Workflow-level numbers use the deterministic FAKE provider, so they measure retrieval, policy and citation plumbing, not LLM quality."
+ ],
+ "sweep": {
+  "grid": [
+   {
+    "min_terms": 1,
+    "min_chunks": 1,
+    "min_sim": null,
+    "J": 0.25,
+    "tpr": 1.0,
+    "fpr": 0.75
+   },
+   {
+    "min_terms": 1,
+    "min_chunks": 2,
+    "min_sim": null,
+    "J": 0.25,
+    "tpr": 0.875,
+    "fpr": 0.625
+   },
+   {
+    "min_terms": 1,
+    "min_chunks": 3,
+    "min_sim": null,
+    "J": 0.25,
+    "tpr": 0.875,
+    "fpr": 0.625
+   },
+   {
+    "min_terms": 2,
+    "min_chunks": 1,
+    "min_sim": null,
+    "J": 0.375,
+    "tpr": 1.0,
+    "fpr": 0.625
+   },
+   {
+    "min_terms": 2,
+    "min_chunks": 2,
+    "min_sim": null,
+    "J": 0.375,
+    "tpr": 0.75,
+    "fpr": 0.375
+   },
+   {
+    "min_terms": 2,
+    "min_chunks": 3,
+    "min_sim": null,
+    "J": 0.5,
+    "tpr": 0.75,
+    "fpr": 0.25
+   },
+   {
+    "min_terms": 3,
+    "min_chunks": 1,
+    "min_sim": null,
+    "J": 0.75,
+    "tpr": 1.0,
+    "fpr": 0.25
+   },
+   {
+    "min_terms": 3,
+    "min_chunks": 2,
+    "min_sim": null,
+    "J": 0.25,
+    "tpr": 0.5,
+    "fpr": 0.25
+   },
+   {
+    "min_terms": 3,
+    "min_chunks": 3,
+    "min_sim": null,
+    "J": 0.0625,
+    "tpr": 0.1875,
+    "fpr": 0.125
+   },
+   {
+    "min_terms": 4,
+    "min_chunks": 1,
+    "min_sim": null,
+    "J": 0.875,
+    "tpr": 0.875,
+    "fpr": 0.0
+   },
+   {
+    "min_terms": 4,
+    "min_chunks": 2,
+    "min_sim": null,
+    "J": 0.1875,
+    "tpr": 0.1875,
+    "fpr": 0.0
+   },
+   {
+    "min_terms": 4,
+    "min_chunks": 3,
+    "min_sim": null,
+    "J": 0.0625,
+    "tpr": 0.0625,
+    "fpr": 0.0
+   },
+   {
+    "min_terms": 5,
+    "min_chunks": 1,
+    "min_sim": null,
+    "J": 0.625,
+    "tpr": 0.625,
+    "fpr": 0.0
+   },
+   {
+    "min_terms": 5,
+    "min_chunks": 2,
+    "min_sim": null,
+    "J": 0.125,
+    "tpr": 0.125,
+    "fpr": 0.0
+   },
+   {
+    "min_terms": 5,
+    "min_chunks": 3,
+    "min_sim": null,
+    "J": 0.0,
+    "tpr": 0.0,
+    "fpr": 0.0
+   }
+  ],
+  "selected": {
+   "min_terms": 4,
+   "min_chunks": 1,
+   "min_sim": null,
+   "J": 0.875,
+   "tpr": 0.875,
+   "fpr": 0.0
+  }
+ }
+}

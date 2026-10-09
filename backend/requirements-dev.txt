@@ -1,0 +1,8 @@
+-r requirements.txt
+pytest>=7.4
+httpx>=0.27
+reportlab>=4.0
+# light dependencies for the OCR page-rendering tests (the real OCR engine, rapidocr, stays optional: requirements-ocr.txt)
+pypdfium2>=4
+pillow>=10
+numpy

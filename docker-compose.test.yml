@@ -1,0 +1,25 @@
+# DISPOSABLE test infrastructure (not the application stack):
+#   docker compose -f docker-compose.test.yml up -d
+# Postgres with pgvector on :55430 (database eduos_test), Redis on :63790. Data lives in tmpfs and vanishes on stop.
+services:
+  pg-test:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: eduos
+      POSTGRES_PASSWORD: devpass-test-only
+      POSTGRES_DB: eduos_test
+    ports: ["55430:5432"]
+    tmpfs: ["/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eduos -d eduos_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  redis-test:
+    image: redis:7-alpine
+    ports: ["63790:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20

@@ -1,0 +1,100 @@
+# M1/Phase 2 run as a modular monolith (documented fallback, docs/ARCHITECTURE.md section 14): one API image,
+# plus the same image started as the ingestion worker. Redis is a wake-up channel only; PostgreSQL holds the jobs.
+x-backend-env: &backend-env
+  APP_ENV: ${APP_ENV:-development}
+  DATABASE_URL: postgresql+psycopg2://eduos:${POSTGRES_PASSWORD}@postgres:5432/eduos
+  JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (>= 32 chars)}
+  STORAGE_DIR: /app/storage
+  REDIS_URL: redis://redis:6379/0
+  INGESTION_MODE: async
+  RETRIEVAL_MODE: ${RETRIEVAL_MODE:-hybrid}
+  EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-none}     # sentence_transformers needs: docker compose build --build-arg INSTALL_EMBEDDINGS=true
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:-sentence-transformers/all-MiniLM-L6-v2}
+  RET_MIN_TERMS: ${RET_MIN_TERMS:-4}
+  RET_MIN_SIM: ${RET_MIN_SIM:-}
+  OCR_ENGINE: ${OCR_ENGINE:-none}                     # rapidocr needs: --build-arg INSTALL_OCR=true
+  PARSER_ISOLATION: subprocess
+  PARSER_TIMEOUT_S: ${PARSER_TIMEOUT_S:-120}
+  PARSER_MEMORY_MB: ${PARSER_MEMORY_MB:-0}            # POSIX address-space limit for the parser child process (0 = off)
+  HF_HOME: /home/eduos/.cache/huggingface
+  LLM_PROVIDER: ${LLM_PROVIDER:-fake}                  # fake (offline demo) | ollama | openai_compatible
+  LLM_MODEL: ${LLM_MODEL:-}
+  LLM_BASE_URL: ${LLM_BASE_URL:-}                     # ollama on the host: http://host.docker.internal:11434
+  LLM_API_KEY: ${LLM_API_KEY:-}                       # server-side only; optional
+  LLM_TIMEOUT_S: ${LLM_TIMEOUT_S:-120}
+  LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-1}
+  LLM_ALLOW_EXTERNAL: ${LLM_ALLOW_EXTERNAL:-false}
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16        # pgvector for hybrid retrieval; the app also works without the extension
+    environment:
+      POSTGRES_USER: eduos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: eduos
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eduos -d eduos"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]   # wake-up queue only: losing it loses nothing
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      args:
+        INSTALL_EMBEDDINGS: ${INSTALL_EMBEDDINGS:-false}
+        INSTALL_OCR: ${INSTALL_OCR:-false}
+    environment:
+      <<: *backend-env
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      SEED_ON_START: ${SEED_ON_START:-true}
+      SEED_DEMO_PASSWORD: ${SEED_DEMO_PASSWORD:-eduos-demo-2026}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # reach an Ollama running on the Docker host (Linux needs this line)
+    ports:
+      - "8000:8000"
+    volumes:
+      - storage:/app/storage
+      - hfcache:/home/eduos/.cache/huggingface    # embedding model weights survive rebuilds
+
+  worker:
+    build:
+      context: ./backend
+      args:
+        INSTALL_EMBEDDINGS: ${INSTALL_EMBEDDINGS:-false}
+        INSTALL_OCR: ${INSTALL_OCR:-false}
+    command: ["worker"]
+    environment:
+      <<: *backend-env
+    depends_on:
+      backend:
+        condition: service_healthy      # migrations are applied by the backend before the worker starts
+    volumes:
+      - storage:/app/storage            # shared with the API: it stores uploads, the worker reads them
+      - hfcache:/home/eduos/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "python", "-c", "import app.worker"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  pgdata:
+  storage:
+  hfcache:

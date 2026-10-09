@@ -1,0 +1,6 @@
+# Optional: OCR for scanned PDF pages (local, CPU). Without it, pages lacking a text layer are reported as empty.
+-r requirements.txt
+rapidocr-onnxruntime>=1.3
+pypdfium2>=4
+pillow>=10
+numpy

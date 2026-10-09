@@ -1,0 +1,26 @@
+# secrets / local config
+.env
+*.env.local
+*.pem
+*.key
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+# data
+storage/
+*.dump
+*.sql.gz
+pgdata/
+# node
+node_modules/
+frontend/dist/
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.eval_storage/

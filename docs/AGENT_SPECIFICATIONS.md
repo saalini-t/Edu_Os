@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Design. **No component below is implemented.** Code blocks are proposed type definitions, not existing code. |
+| **Status** | Design. Implemented in M1: Doubt Understanding and Explanation (fake provider only), the policy engine R1-R10, retrieval (FTS only). Everything else here is not implemented. Code blocks are proposed definitions; the implemented variants live in `backend/app/` (see [PHASE1_ACCEPTANCE §4](PHASE1_ACCEPTANCE.md)). |
 | **Version** | 0.1 (2026-10-09) |
 | **Related** | [ARCHITECTURE](ARCHITECTURE.md), [API_CONTRACTS](API_CONTRACTS.md), [EVALUATION_PLAN](EVALUATION_PLAN.md) |
 

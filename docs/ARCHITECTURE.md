@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Design. **Nothing described here is implemented yet.** Claims about behavior are requirements, not observations. |
+| **Status** | Target design. Claims about behavior are requirements, not observations. **Update (2026-10-09):** the M1 vertical slice is implemented as a modular monolith; see [PHASE1_ACCEPTANCE](PHASE1_ACCEPTANCE.md) for what exists, what was verified, and deviations from this design. |
 | **Version** | 0.1 (documentation stage, 2026-10-09) |
 | **Scope** | Hackathon: The Industry Games 2026, District 03 (AI-Native Education OS for Intelligent Doubt Resolution, sponsored by ATOMTALK) |
 | **Companion docs** | [IMPLEMENTATION_PLAN](IMPLEMENTATION_PLAN.md), [API_CONTRACTS](API_CONTRACTS.md), [AGENT_SPECIFICATIONS](AGENT_SPECIFICATIONS.md), [EVALUATION_PLAN](EVALUATION_PLAN.md), [README](../README.md) |
@@ -199,7 +199,7 @@ flowchart TB
 |---|---|---|
 | web → core-api | HTTPS/JSON (polling for results in MVP; SSE is a stretch) | Simple, testable |
 | core-api → orchestrator, orchestrator → knowledge-svc/core-api | Synchronous HTTP/JSON with service token | Request path needs answers now |
-| Ingestion jobs | Redis queue (`arq`) | Long-running, retryable, off the request path |
+| Ingestion jobs | PostgreSQL job table (source of truth) + Redis wake-up queue; separate `worker` process (**as built: ADR-008**, not `arq`) | Long-running, retryable, off the request path |
 | `document.ready/failed/deleted` | Redis Stream `eduos.events`, consumer group per service | Decoupled notification |
 | `escalation.resolved` → run resume | Outbox row in `core.outbox` → relay calls `POST /internal/v1/runs/{id}/resume` with retry | No dual-write loss |
 
@@ -681,7 +681,7 @@ One Postgres instance with three schemas and three roles; separate connection st
 
 Env vars (names only): `DATABASE_URL_CORE`, `DATABASE_URL_ORCH`, `DATABASE_URL_KNOW`, `REDIS_URL`, `JWT_SECRET`, `SERVICE_TOKEN_SECRET`, `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL_SMALL`, `LLM_MODEL_LARGE`, `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_DIM`, `MAX_ACTIONS`, `MAX_CLARIFY_ROUNDS`, `MAX_EXPLAIN_ATTEMPTS`, `MAX_PRACTICE_SETS`, `MAX_RUN_TOKENS`, `T_CLARIFY`, `RET_MIN_SIM`, `RET_MIN_CHUNKS`, `T_MASTER`, `N_MIN`, `HALF_LIFE_DAYS`, `ALPHA0`, `BETA0`, `ESCALATION_TTL`, `JEV_*` (§13.5). `LLM_PROVIDER=fake` is the default.
 
-## 20. Other ADRs (summary)
+## 20. Other ADRs (summary; ADR-008 to ADR-012 were added in Phase 2, see section 21)
 
 | ADR | Decision | Alternative rejected |
 |---|---|---|
@@ -691,3 +691,37 @@ Env vars (names only): `DATABASE_URL_CORE`, `DATABASE_URL_ORCH`, `DATABASE_URL_K
 | 005 | Three services + worker, monolith fallback | Per-agent services (no justification) |
 | 006 | Deterministic policy, advisor-only models | LLM supervisor (untestable, unbounded) |
 | 007 | Topic-prerequisite table | Knowledge graph store (no query we need beyond recursive CTE) |
+
+
+---
+
+## 21. Phase 2 architecture decisions (as built)
+
+> Status of the whole document: sections 1-20 are the *target* design; these ADRs record what Phase 2 actually decided and built (see [PHASE2_ACCEPTANCE](PHASE2_ACCEPTANCE.md)). Where they differ, the ADRs describe the running code.
+
+### ADR-008: Ingestion jobs live in PostgreSQL; Redis only wakes workers up
+* **Context.** Ingestion must survive worker crashes, Redis outages and restarts, never process a document twice, and keep partial work invisible.
+* **Decision.** `know.ingestion_jobs` is the source of truth (claim with `FOR UPDATE SKIP LOCKED`, lease + heartbeat via `lease_expires_at`, bounded retries with exponential backoff, a partial unique index = one active job per document). A Redis list carries wake-ups only; a periodic sweep re-announces due jobs and a reaper re-queues expired leases. The worker is the same application package started as `python -m app.worker`.
+* **Alternatives rejected.** Redis-only queue (a lost Redis loses jobs, so a second durable record would be needed anyway); `arq`/Celery (extra framework, and recovery semantics still needed a DB record); a separate ingestion microservice (no benefit in a monolith).
+* **Consequences.** Redis can be unavailable with no data loss (verified in Docker). Throughput is bounded by polling/claiming in PostgreSQL, adequate for this scale. The worker needs the same storage volume as the API.
+
+### ADR-009: Hybrid retrieval = full text + pgvector fused with RRF, behind one interface, with visible fallback
+* **Decision.** `build_retriever` is the only entry point. Hybrid runs the PostgreSQL full-text ranker and a pgvector cosine ranker (access control applied in SQL before ranking) and fuses them with reciprocal-rank fusion (k = 60, candidate pool 20, fixed a priori). Every result reports `mode_requested`, `mode_used`, `fallback_reason`, `degraded`. Missing embeddings, an absent extension, no active model, a model mismatch, an embedding error and an empty query all degrade to full text (or an empty result) and say so. Ties are broken by stable content keys, never UUIDs.
+* **Embedding model control.** `know.embedding_models` registers (name, dims) and exactly one is `active`; search uses only the active model's vectors and refuses to run dense search if the configured model differs; switching is the explicit `python -m app.knowledge.reindex --activate`, after the new model is fully embedded. Old vectors are ineligible once retired and can be purged. A per-model partial HNSW index exists but the planner uses an exact scan at this size.
+* **Why pgvector rather than Chroma.** One datastore, SQL-level access control, transactional deletion (embeddings cascade with chunks). pgvector is **optional infrastructure**: migrations and the application work without it.
+* **Measured outcome.** On the 54-question set, hybrid does not rank better than full text beyond noise; it improves how many answerable questions are judged "supported" (TPR 0.875 → 1.0) at the cost of one extra hard negative on dev. Treat the benefit as unproven.
+
+### ADR-010: Versioned documents; every change is an atomic swap
+* **Decision.** `documents.ingestion_version` is the active version. Ingest, replace and re-index build the new chunks and, in **one transaction**, delete all previous chunks (embeddings cascade), insert the new ones, bump the version and finish the job. The previous version keeps serving until that commit; a failed or crashed attempt changes nothing. Retrieval additionally filters on `chunk.ingestion_version = document.ingestion_version` as defense in depth. Delete is a single transaction plus file removal. `know.document_events` is an append-only, FK-free, metadata-only audit trail that survives deletion.
+* **Consequence.** No window in which two versions are searchable and none in which a document is READY without chunks (tested with a simulated hard crash).
+
+### ADR-011: OCR is optional, page-level, budgeted, and runs in a sandboxed child process
+* **Decision.** OCR only for pages whose text layer is nearly empty, only when `OCR_ENGINE` is set, with a per-document page budget, a pixel cap, per-page failure reporting (`extraction_report`) and no effect on ordinary text PDFs. Parsing runs in a child process (`parse_child`) with a wall-clock timeout everywhere and an address-space limit on POSIX; timeouts, crashes and limit hits become permanent job failures with specific error codes. Engine: RapidOCR (pip-installable, local); Tesseract is not implemented.
+* **Consequences.** A hostile or pathological PDF can kill only its child process. Windows has no memory limit (timeout only). OCR accuracy on real scans is unmeasured.
+
+### ADR-012: The evidence ledger is append-only, validated, and cannot carry mastery weight yet
+* **Decision.** `core.evidence_events` accepts only registered types; in Phase 2 these are three self-report types pinned to **weight 0** by application validation *and* database CHECK constraints; a trigger rejects UPDATE/DELETE; `(evidence_type, source_ref)` is unique so duplicate deliveries cannot double-count; provenance (session, run, intervention, ack) is mandatory. Graded-attempt and teacher types are explicitly rejected until Phase 4 introduces the model that consumes them. An acknowledgment never changes mastery or confirms a gap.
+* **Open issue.** Strict append-only conflicts with deleting or anonymizing a student's data; Phase 4 must define a controlled path (for example a privileged anonymization function with its own audit record).
+
+### Data model additions in Phase 2 (migrations 0002 to 0005)
+`know.embedding_models` (registry, one `active`), `know.chunk_embeddings` (`vector` column, created with raw SQL only when pgvector exists; FK to chunks and models with ON DELETE CASCADE), `know.ingestion_jobs` (kind `ingest | replace | reindex`, lease, attempts, `enqueue_error`, payload), `know.document_events`, new columns `know.chunks.ingestion_version`, `know.documents.extraction_report` and `updated_at`, and `core.evidence_events` (append-only, CHECK-constrained). Not yet built from section 15: `learner_topic_state`, `gap_hypotheses`, practice items, attempts, teachers, escalations, feedback.
