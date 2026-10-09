@@ -71,6 +71,11 @@ def clean_tables(database):
                           "core.evidence_events, orch.workflow_runs, core.idempotency_keys, core.audit_events CASCADE"))
         # (TRUNCATE is test cleanup only: the append-only trigger guards ordinary UPDATE/DELETE of ledger rows)
         conn.execute(text("DELETE FROM know.embedding_models"))   # cascades to chunk_embeddings
+        # embedding repair / reindex tests change the seed document's state: restore it (and drop its job history)
+        conn.execute(text("DELETE FROM know.ingestion_jobs WHERE kind = 'embed' AND document_id IN (SELECT id FROM know.documents "
+                          "WHERE visibility = 'course' AND title LIKE 'Computer Networks%')"))
+        conn.execute(text("UPDATE know.documents SET status = 'READY', error_code = NULL "
+                          "WHERE visibility = 'course' AND title LIKE 'Computer Networks%'"))
         conn.execute(text("DELETE FROM know.documents WHERE visibility <> 'course' OR title NOT LIKE 'Computer Networks%'"))
         conn.execute(text("UPDATE core.users SET active = true, language = 'en'"))
         conn.execute(text("UPDATE core.teacher_profiles SET active = true"))
@@ -138,6 +143,18 @@ def ask(client, headers, course_id, text_, key=None):
 
 
 SLOW_START_Q = "Why does TCP slow start double the congestion window every RTT, but then stop doubling?"
+
+
+def blank_pdf(pages: int = 1) -> bytes:
+    """A VALID PDF whose pages have no text layer: passes upload admission, then fails in the worker (NO_EXTRACTABLE_TEXT)."""
+    import io
+    from reportlab.pdfgen import canvas
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf)
+    for _ in range(pages):
+        c.showPage()
+    c.save()
+    return buf.getvalue()
 
 
 def make_pdf(paragraphs: list[str]) -> bytes:

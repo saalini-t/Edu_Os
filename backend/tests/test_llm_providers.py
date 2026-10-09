@@ -200,3 +200,36 @@ def test_live_ollama_returns_schema_valid_output_for_every_operation():
                                            rubric="Mentions: ssthresh, congestion avoidance, linear",
                                            student_answer="Because it reaches ssthresh and then grows linearly."))
     assert isinstance(ev, EvaluationOut)
+
+
+def test_malformed_practice_items_are_dropped_individually_but_an_all_bad_set_is_invalid():
+    good = {"kind": "short_text", "prompt": "Explain why the window stops doubling.", "answer_key": "At ssthresh.", "rubric": "Mentions: ssthresh"}
+    bad = {"kind": "mcq", "prompt": "Which statement is true here?", "answer_key": "x"}          # mcq without options
+    p = PromptedProvider(ollama(lambda r: chat_reply({"items": [bad, good]})))
+    out = p.generate_practice(PracticeRequest(topic_id="t1", topic_name="TCP", doubt_text="d", chunks=CHUNKS))
+    assert [i.kind for i in out.items] == ["short_text"]
+    p = PromptedProvider(ollama(lambda r: chat_reply({"items": [bad]})))
+    with pytest.raises(ValidationError):
+        p.generate_practice(PracticeRequest(topic_id="t1", topic_name="TCP", doubt_text="d", chunks=CHUNKS))
+
+
+def test_lettered_options_in_the_prompt_and_a_missing_rubric_are_repaired_deterministically():
+    mcq = {"kind": "mcq", "prompt": "What does slow start do?\nA) halves cwnd\nB) doubles cwnd each RTT\nC) keeps cwnd fixed\nD) resets it",
+           "answer_key": "B"}
+    short = {"kind": "short_text", "prompt": "Explain congestion avoidance.", "answer_key": "cwnd grows by one MSS per RTT."}
+    p = PromptedProvider(ollama(lambda r: chat_reply({"items": [mcq, short]})))
+    out = p.generate_practice(PracticeRequest(topic_id="t1", topic_name="TCP", doubt_text="d", chunks=CHUNKS))
+    m, s = out.items
+    assert m.options == ["halves cwnd", "doubles cwnd each RTT", "keeps cwnd fixed", "resets it"] and m.answer_key == "doubles cwnd each RTT"
+    assert "A)" not in m.prompt and "reference answer" in s.rubric
+
+
+def test_an_identical_repeated_request_is_asked_with_a_warmer_temperature_but_the_first_is_reproducible():
+    temps = []
+
+    def handler(req):
+        temps.append(json.loads(req.content)["options"]["temperature"])
+        return chat_reply({"a": 1})
+    b = ollama(handler)
+    b.complete_json("sys", "user", {}); b.complete_json("sys", "user", {}); b.complete_json("sys", "other", {})
+    assert temps == [0.0, 0.35, 0.0]

@@ -84,7 +84,7 @@ export type Trace = {
   summary: { rules_fired: string[]; final_rule_id: string | null; final_action: string | null; providers_used: string[] };
   steps: { seq: number; node: string; latency_ms: number; provider: string | null; model: string | null; prompt_version: string | null; error: string | null; output: Record<string, unknown> }[];
   decisions: { decision_id: string; rule_id: string; action: string; reasons: string[]; evidence_refs: string[] }[];
-  retrieval: { query: string; mode: string | null; results: { chunk_id: string; page: number; matched_terms: number }[] }[];
+  retrieval: { query: string; mode: { used?: string; requested?: string; degraded?: boolean; fallback_reason?: string | null; embedding_model?: string } | null; results: { chunk_id: string; page: number; matched_terms: number }[] }[];
   citation_validation: { fallback: string | null; n_verified: number; n_stripped: number; checks: { chunk_id: string; quote: string; verified: boolean; reason: string }[] }[];
 };
 export type SystemInfo = {
@@ -97,6 +97,19 @@ export type IngestionJob = {
   job_id: string; title: string; document_status: string; kind: string; status: string; stage: string | null; attempts: number;
   max_attempts: number; error_code: string | null; last_error: string | null; created_at: string; finished_at: string | null;
 };
+
+// Documents: every field is persisted backend state. `searchable` is true only when chunks AND all embeddings exist.
+export type DocPhase = "queued" | "parsing" | "chunking" | "embedding" | "ready" | "failed";
+export type DocProgress = { phase: DocPhase; pages: number | null; chunks_total: number | null; chunks_embedded: number | null; percent: number | null; reprocessing: boolean };
+export type DocInfo = {
+  document_id: string; course_id: string; title: string; filename: string; status: string; searchable: boolean; retryable: boolean;
+  visibility: "private" | "course"; mine: boolean;
+  progress: DocProgress | null; page_count: number | null; chunk_count: number | null; error_code: string | null; version: number;
+  extraction: { ocr_engine: string | null; ocr_pages: number[]; empty_pages: number[]; failed_pages: unknown[]; ocr_budget_exceeded_pages: number[] } | null;
+  created_at: string; updated_at: string;
+  job: { status: string; stage: string | null; attempts: number; max_attempts: number; error_code: string | null } | null;
+};
+export type UploadConfig = { max_upload_bytes: number; max_pdf_pages: number; can_upload: boolean; courses: { course_id: string; code: string; name: string }[] };
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string) { super(message); }
@@ -141,6 +154,32 @@ export const api = {
   logout() { token = null; },
   // student
   courses: () => call<{ items: { document_id: string; course_id: string; title: string; status: string }[] }>("GET", "/v1/documents"),
+  // documents (student + admin)
+  uploadConfig: () => call<UploadConfig>("GET", "/v1/documents/upload-config"),
+  documents: () => call<{ items: DocInfo[] }>("GET", "/v1/documents"),
+  retryDocument: (id: string) => call<DocInfo>("POST", `/v1/documents/${id}/retry`),
+  deleteDocument: (id: string) => call<void>("DELETE", `/v1/documents/${id}`),
+  setVisibility: (id: string, visibility: "private" | "course") => call<DocInfo>("PATCH", `/v1/documents/${id}/visibility`, { visibility }),
+  /** XMLHttpRequest, not fetch: it is the only way a browser reports upload progress. */
+  uploadDocument(course_id: string, title: string, file: File, onProgress: (pct: number) => void): Promise<{ doc: DocInfo; created: boolean }> {
+    return new Promise((resolve, reject) => {
+      const x = new XMLHttpRequest();
+      x.open("POST", "/v1/documents");
+      if (token) x.setRequestHeader("Authorization", `Bearer ${token}`);
+      x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((100 * e.loaded) / e.total)); };
+      x.onerror = () => reject(new ApiError(0, "NETWORK", "The upload was interrupted or the server refused the file. Check the file size and your connection, then try again."));
+      x.onload = () => {
+        let body: any = null;
+        try { body = JSON.parse(x.responseText); } catch { /* non-JSON */ }
+        if (x.status >= 200 && x.status < 300) return resolve({ doc: body as DocInfo, created: x.status !== 200 });
+        if (x.status === 401 && token) { token = null; onUnauthorized(); }
+        reject(new ApiError(x.status, body?.error?.code ?? "ERROR", body?.error?.message ?? (x.statusText || "Upload failed")));
+      };
+      const f = new FormData();
+      f.append("course_id", course_id); f.append("title", title); f.append("file", file);
+      x.send(f);
+    });
+  },
   doubts: () => call<{ items: DoubtRow[] }>("GET", "/v1/doubts"),
   ask: (course_id: string, text: string, key = newKey()) =>
     call<{ session_id: string; run_id: string; status: string }>("POST", "/v1/doubts", { course_id, text }, { "Idempotency-Key": key }),

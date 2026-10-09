@@ -2,6 +2,7 @@
 are never logged or put into exception messages."""
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from typing import Protocol
@@ -42,11 +43,22 @@ class OllamaBackend:
     def __init__(self, base_url: str, model: str, temperature: float, timeout_s: float):
         self.base_url, self.model, self.temperature = base_url.rstrip("/"), model, temperature
         self._client = httpx.Client(timeout=httpx.Timeout(timeout_s, connect=min(5.0, timeout_s)))
+        self._seen: dict[str, int] = {}
+
+    def _temperature_for(self, system: str, user: str) -> float:
+        """The first request is as configured (0.0 = reproducible). Asking the model the IDENTICAL question again (a retry after
+        invalid output, or a regeneration after duplicates) would just repeat the same answer, so each repeat is warmer."""
+        k = hashlib.sha256((system + "|" + user).encode()).hexdigest()
+        n = self._seen.get(k, 0)
+        if len(self._seen) > 200:
+            self._seen.clear()
+        self._seen[k] = n + 1
+        return min(self.temperature + 0.35 * n, 1.0)
 
     def complete_json(self, system: str, user: str, schema: dict, max_tokens: int | None = None) -> dict:
         body = {"model": self.model, "stream": False, "format": schema,           # structured output: constrained to the schema
                 "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-                "keep_alive": "30m", "options": {"temperature": self.temperature, "num_ctx": NUM_CTX, "repeat_penalty": 1.1,
+                "keep_alive": "30m", "options": {"temperature": self._temperature_for(system, user), "num_ctx": NUM_CTX, "repeat_penalty": 1.1,
                             **({"num_predict": max_tokens} if max_tokens else {})}}   # a token cap bounds runaway generation
         try:
             r = self._client.post(f"{self.base_url}/api/chat", json=body)

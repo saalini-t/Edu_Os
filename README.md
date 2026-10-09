@@ -4,29 +4,29 @@
 
 An AI-native education OS for **intelligent doubt resolution** (The Industry Games 2026, District 03, sponsored by ATOMTALK).
 
-> **Status: Phases 1 and 2 implemented as a modular monolith** (the documented fallback): one API process plus one background worker, PostgreSQL (with optional pgvector) and Redis.
-> Student doubt → understanding → course-material retrieval → deterministic policy → cited explanation → acknowledgment → persisted, admin-inspectable trace.
-> Still **design only**: practice generation, graded attempts and the mastery model, teacher matching and resumable escalation, a real LLM provider.
-> What is and isn't verified: [docs/PHASE2_ACCEPTANCE.md](docs/PHASE2_ACCEPTANCE.md) (and [PHASE1](docs/PHASE1_ACCEPTANCE.md)).
+> **Status: Phases 1–5 implemented as a modular monolith** (a documented, deliberate choice: see [PHASE3_5_ACCEPTANCE §6](docs/PHASE3_5_ACCEPTANCE.md)): one API process plus one background worker, PostgreSQL (pgvector) and Redis.
+> Doubt → understanding → authorized retrieval → cited, verified explanation → targeted practice → graded evidence → mastery estimate → deterministic policy (R1–R10) → teacher escalation and resume, with a React workspace for students, teachers and administrators.
+> What was run, what passed, and what was **not** verified: [docs/PHASE3_5_ACCEPTANCE.md](docs/PHASE3_5_ACCEPTANCE.md).
+> **Jev is out of scope** and has been removed from the code and configuration.
 
 ## What works today
 
-- FastAPI backend, PostgreSQL schemas `core` / `orch` / `know`, Alembic migrations (0001–0005), structured JSON logs, consistent error envelope.
-- Login (argon2 + short-lived JWT), student / teacher / admin roles, server-side authorization and course/owner access control.
-- **Asynchronous ingestion:** upload returns `202 QUEUED`; a **worker** (`python -m app.worker`) parses, chunks and indexes. Jobs live in PostgreSQL (retries with backoff, lease-based crash recovery, duplicate protection); Redis only wakes the worker, and ingestion keeps working if Redis is down.
-- **Document lifecycle:** replace (`PUT /v1/documents/{id}/file`), re-index, delete — atomic version swap, no obsolete chunks or embeddings left searchable, admin audit trail.
-- **Optional OCR** for scanned pages (RapidOCR), page-level, budgeted, in a sandboxed parser process. Off by default.
-- **Retrieval:** PostgreSQL full-text search, plus optional **hybrid** (pgvector + reciprocal-rank fusion) with a local embedding model. Falls back to full text — visibly (in traces and `/readyz`) — when embeddings are unavailable.
-- Persisted, bounded workflow with a pure, table-tested policy engine (R1–R10), citation verification, and an admin trace.
-- **Acknowledgments** ("I understood" / "still confused" / "check me") recorded in an append-only **evidence ledger** with **zero mastery weight**.
-- **Fake LLM provider** only (deterministic, extractive, labelled as fake). No AI credentials needed. **Jev is off** and cannot be enabled in this version.
-- Retrieval **evaluation harness** and a 54-question labelled set (`eval/`), with pre-registered thresholds.
-- Minimal React + TypeScript UI.
+- **Explain → Practise → Verify**, persisted and resumable: understand → retrieve → explain (citations checked against the retrieved chunks) → generate practice (answer keys stay server-side) → grade (exact for objective items, structured rubric grading with an uncertainty gate for free text) → evidence → mastery → decide again. Duplicate submissions, retries and restarts are idempotent.
+- **Learning Gap Map** and **Learning Passport**: per-topic status (not assessed / suspected gap / practising / improving / demonstrated) derived from the append-only evidence ledger, each linked to its evidence and timestamps, with curated prerequisites as *suggestions*. Acknowledgements ("understood", "still confused", "check me") carry **zero** mastery weight; one correct answer is never mastery; a gap is confirmed only after two failed attempts on distinct targeted items or by a teacher.
+- **Smart human escalation**: deterministic teacher matching (topic fit, availability, language, feedback, load), inbox, case brief with authorized course sources, asynchronous thread, resolution that writes bounded evidence and **resumes the workflow**, expiry, admin assign/override, full audit trail.
+- **Explainable decisions**: each policy decision is stored with its rule, reasons, evidence references and provider/model, and shown in plain language to students and in detail to admins. A language model never overrides a rule.
+- **Model providers**: `fake` (offline, deterministic, labelled), `ollama` (local, no paid key) and any OpenAI-compatible endpoint. Output is validated against strict schemas, with timeouts, bounded retries and deterministic fallbacks. Credentials are server-side only.
+- Hybrid retrieval (full-text + pgvector, RRF) with visible fallback, async ingestion worker, document lifecycle, optional OCR, labelled retrieval evaluation (`eval/`).
+- Student anonymization that keeps the append-only ledger intact (pseudonymised, content deleted): see ADR-013 in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- React + TypeScript UI for the three roles, responsive, with loading / empty / error / success states.
 
 ## Quickstart (Docker Compose)
 
 ```bash
 cp .env.example .env     # set POSTGRES_PASSWORD and JWT_SECRET (>= 32 chars: python -c "import secrets;print(secrets.token_urlsafe(48))")
+# Real local model (recommended): install Ollama, `ollama pull qwen2.5:3b`, then in .env:
+#   LLM_PROVIDER=ollama  LLM_MODEL=qwen2.5:3b  LLM_BASE_URL=http://host.docker.internal:11434
+# Offline deterministic demo instead: LLM_PROVIDER=fake
 docker compose up --build      # postgres(pgvector), redis, backend (migrates + seeds), worker
 curl localhost:8000/readyz
 cd frontend && npm install && npm run dev      # http://localhost:5173 (proxies /v1 to :8000)
@@ -57,15 +57,17 @@ All use the password in `SEED_DEMO_PASSWORD` (default `eduos-demo-2026`).
 | `student1@demo.local` | student | enrolled in Computer Networks |
 | `student2@demo.local` | student | enrolled in Computer Networks (isolation tests) |
 | `student3@demo.local` | student | enrolled only in the empty OS course (course-access tests) |
-| `teacher1@demo.local` | teacher | no teacher features until Phase 5 |
-| `admin@demo.local` | admin | trace inspection, document management |
+| `teacher1@demo.local` | teacher | TCP / reliability, English + Hindi |
+| `teacher2@demo.local` | teacher | IP addressing and routing |
+| `teacher3@demo.local` | teacher | Operating Systems course only (must never see Computer Networks cases) |
+| `admin@demo.local` | admin | traces, system health, escalations, ingestion |
 
 ## Try it
 
-1. Sign in as `student1@demo.local`, ask: *"Why does TCP slow start double the congestion window every RTT, but then stop doubling?"* You get an extractive explanation with numbered, verified citations.
-2. Click **I understood**: the acknowledgment is stored with zero mastery weight; practice does not exist yet, so the run ends `UNVERIFIED` and says so.
-3. As `admin@demo.local`, **Load recent runs** → open the run: rule fired, retrieval mode actually used, chunk IDs, citation checks.
-4. Upload a PDF (API: `POST /v1/documents`), watch `GET /v1/documents/{id}` go `QUEUED → PROCESSING → READY`, then search it.
+1. Sign in as `student2@demo.local`, ask: *"Why does TCP slow start double the congestion window every RTT, but then stop doubling?"* Open a citation to see the verified source quote.
+2. Choose **Check me with practice**, answer the questions: feedback and the reference answer appear only after you submit. Open **Gap Map** and **Learning Passport** to see the status and the evidence behind it.
+3. Ask *"I want to talk to a human teacher about TCP congestion control"*. Sign in as `teacher1@demo.local`: accept the case, reply, resolve. The student's doubt completes and shows the teacher's note.
+4. As `admin@demo.local`: System health (provider, retrieval mode), Workflow runs (decisions explained, citation validation), Escalations (ranked candidates, audit trail), Ingestion.
 
 ## Tests and checks
 
@@ -81,7 +83,9 @@ TEST_DATABASE_URL=postgresql+psycopg2://eduos:devpass-test-only@127.0.0.1:55430/
 | Frontend | `cd frontend && npm run build` |
 | Compose: async ingestion, worker/Redis outages | `python e2e/compose_async_check.py` (stack running) |
 | Compose: OCR, lifecycle, parser memory limit | `python e2e/compose_ocr_lifecycle_check.py` (needs `INSTALL_OCR=true`, `OCR_ENGINE=rapidocr`) |
-| Browser smoke test | `E2E_BASE_URL=http://localhost:5173 python -m pytest e2e/test_browser_smoke.py` (needs `pip install playwright` and Chrome or Edge) |
+| 12-step acceptance scenario over the real API (stack running; fake or Ollama) | `python e2e/acceptance_scenario.py` |
+| Browser journey: student → teacher → admin, mobile layout | `E2E_BASE_URL=http://localhost:5173 python -m pytest e2e/test_browser_smoke.py` (add `E2E_SLOW=1` for a real model; needs `pip install playwright` and Chrome or Edge) |
+| Live local-model tests (opt-in) | `OLLAMA_TEST_MODEL=qwen2.5:3b python -m pytest tests/test_llm_providers.py tests/test_live_ollama_workflow.py -s` |
 | Retrieval evaluation | see [docs/EVALUATION_PLAN.md §11](docs/EVALUATION_PLAN.md) |
 
 ## Configuration
@@ -92,7 +96,8 @@ See [.env.example](.env.example). Secrets come only from environment variables; 
 
 | Document | Contents |
 |---|---|
-| [docs/PHASE2_ACCEPTANCE.md](docs/PHASE2_ACCEPTANCE.md) | **Phase 2: what was built, run and measured; defects found; deviations; unverified items** |
+| [docs/PHASE3_5_ACCEPTANCE.md](docs/PHASE3_5_ACCEPTANCE.md) | **Phases 3–5 and the innovation addendum: what was built, run and measured; limitations; NOT RUN items** |
+| [docs/PHASE2_ACCEPTANCE.md](docs/PHASE2_ACCEPTANCE.md) | Phase 2: what was built, run and measured; defects found; deviations; unverified items** |
 | [docs/PHASE1_ACCEPTANCE.md](docs/PHASE1_ACCEPTANCE.md) | Phase 1 record (with the Stage 0 re-verification table) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Target architecture, diagrams, policy, ADR-001 (Jev) and **ADR-008–012 (as built)** |
 | [docs/API_CONTRACTS.md](docs/API_CONTRACTS.md) | Target contracts; **section 9 = Phase 2 as implemented** |
@@ -103,9 +108,8 @@ See [.env.example](.env.example). Secrets come only from environment variables; 
 
 ## Safety and honesty notes
 
-- The fake provider is not an AI model; it quotes retrieved sentences. Output is labelled in the API (`provider: "fake"`), logs and UI.
-- Mastery is a stub (always "unknown"). Acknowledgments carry zero mastery weight by construction (code and database constraints); nothing in the system infers mastery from them.
-- Citation verification proves a quote exists in a retrieved chunk, **not** that it supports the claim; measured citation precision on the small evaluation set is about 0.6–0.7.
-- The retrieval evaluation is small, single-annotator and its test split has been looked at many times; differences between full-text, dense and hybrid retrieval are within noise.
-- Offline tests do not measure learning outcomes.
-- Jev is disabled; configuration rejects any other `JEV_MODE`. No student data is sent to any external service; the first use of the local embedding model downloads public model weights (can be disabled).
+- The fake provider is not an AI model; it quotes retrieved sentences and is labelled everywhere. **Passing tests with the fake provider say nothing about the quality of a real model.** A 3B local model (`qwen2.5:3b`) works end to end but its explanations and questions can be wrong or weak; every explanation is citation-checked, yet that proves a quote exists in a source, **not** that it supports the claim.
+- Mastery is a transparent Beta-Bernoulli estimate with decay (parameters in [eval/THRESHOLDS.md](eval/THRESHOLDS.md)); the thresholds are **untuned development values**, not validated. The system describes a learner's work on topics; it never infers ability or intelligence.
+- The ledger is append-only. Deletion/anonymisation never silently rewrites history: see ADR-013. There is no promise of permanent retention.
+- The retrieval evaluation is small, single-annotator and its test split has been looked at many times; differences between full-text, dense and hybrid retrieval are within noise. No hybrid superiority is claimed.
+- No student data is sent to an external service: non-private model hosts are refused unless `LLM_ALLOW_EXTERNAL=true`. The first use of the local embedding model downloads public model weights.

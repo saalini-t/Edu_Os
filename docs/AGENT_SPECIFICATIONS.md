@@ -1,5 +1,8 @@
 # EduOS Agent and Component Specifications
 
+> **Scope update (Phases 3–5):** Jev is no longer in scope. Sections that discuss Jev / `JevDecisionProvider` are kept only as the historical record of ADR-001; nothing in the code depends on it and no Jev configuration exists. The deterministic R1–R10 engine is the only decision-maker; a decision-provider experiment may be added in a future phase. The as-built description is in [PHASE3_5_ACCEPTANCE.md](PHASE3_5_ACCEPTANCE.md).
+
+
 | | |
 |---|---|
 | **Status** | Design. Implemented in M1: Doubt Understanding and Explanation (fake provider only), the policy engine R1-R10, retrieval (FTS only). Everything else here is not implemented. Code blocks are proposed definitions; the implemented variants live in `backend/app/` (see [PHASE1_ACCEPTANCE §4](PHASE1_ACCEPTANCE.md)). |

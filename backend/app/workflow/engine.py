@@ -41,6 +41,7 @@ log = logging.getLogger("eduos.workflow")
 
 RunStatus = Literal["CREATED", "RUNNING", "AWAITING_STUDENT", "AWAITING_ANSWER", "WAITING_HUMAN",
                     "COMPLETED", "FAILED", "CANCELLED"]
+SCORED_STATUSES = ("GRADED", "UNCERTAIN")
 HARD_RULES = {"R1_explicit_teacher_request", "R1b_safety_flag", "R2_budget_exhausted"}   # precede every adaptive rule
 MAX_NODE_EXECUTIONS = 25  # hard guard per advance() call, independent of the policy budgets
 MAX_DOUBT_CHARS = 2000
@@ -103,6 +104,10 @@ def _hash(obj) -> str:
     return "sha256:" + hashlib.sha256(json.dumps(obj, sort_keys=True, default=str).encode()).hexdigest()[:32]
 
 
+class StaleRun(Exception):
+    """The run changed while a slow call (a model request) was in flight; the result is discarded, not applied."""
+
+
 class WorkflowEngine:
     def __init__(self, db: Session, settings: Settings, provider: LLMProvider, principal: Principal):
         self.db, self.s, self.provider, self.principal = db, settings, provider, principal
@@ -131,10 +136,35 @@ class WorkflowEngine:
         return run
 
     def _lock(self, run_id: uuid.UUID) -> WorkflowRun:
-        run = self.db.scalar(select(WorkflowRun).where(WorkflowRun.id == run_id).with_for_update())
+        run = self.db.scalar(select(WorkflowRun).where(WorkflowRun.id == run_id).with_for_update()
+                             .execution_options(populate_existing=True))      # decide on the row as it is NOW, never a cached copy
         if run is None:
             raise AppError(404, "NOT_FOUND", "Run not found")
         return run
+
+    def _lease_fresh(self, run: WorkflowRun) -> bool:
+        """A RUNNING run was touched recently, so some executor is (or very recently was) working on it."""
+        updated = run.updated_at
+        if updated is None:
+            return False
+        if updated.tzinfo is None:
+            updated = updated.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - updated).total_seconds() < self.s.workflow_lease_seconds
+
+    def _offload(self, run: WorkflowRun, fn, *, strict: bool = True):
+        """Run a slow function (a model call) with NO transaction open: no row lock and no pooled connection are held while
+        waiting. The caller must have no unflushed work it cannot afford to commit early. Afterwards the run is re-locked and
+        revalidated: with strict=True it must be exactly as it was (same version and node), otherwise StaleRun is raised and
+        the result is discarded. strict=False lets the caller revalidate against the fresh state itself."""
+        version, node, run_id = run.version, run.current_node, run.id
+        self.db.commit()                                   # releases the row lock and the connection
+        result = fn()                                      # nothing is held here
+        fresh = self.db.scalar(select(WorkflowRun).where(WorkflowRun.id == run_id).with_for_update()
+                               .execution_options(populate_existing=True))
+        if fresh is None or (strict and (fresh.version != version or fresh.current_node != node)):
+            self.db.rollback()
+            raise StaleRun(f"run {run_id} changed during a slow call at node {node}")
+        return result
 
     def _state(self, run: WorkflowRun) -> WorkflowState:
         return WorkflowState.model_validate(run.state)
@@ -162,8 +192,15 @@ class WorkflowEngine:
             model=model, prompt_version=prompt_version, latency_ms=int((time.perf_counter() - started) * 1000),
             error=error, started_at=datetime.now(timezone.utc)))
 
-    def advance(self, run_id: uuid.UUID) -> WorkflowRun:
+    def advance(self, run_id: uuid.UUID, *, own: bool = False) -> WorkflowRun:
+        """Drive the run until it waits for someone. `own=True` is for the caller that has just set the run RUNNING itself
+        (apply_event). A plain call on a RUNNING run whose lease is fresh does nothing: another executor is mid-call. A RUNNING
+        run whose lease expired is treated as crashed and taken over."""
         run = self._lock(run_id)
+        if not own and run.status == "RUNNING" and self._lease_fresh(run):
+            log.info("advance skipped: run is being executed elsewhere", extra={"run_id": str(run_id)})
+            self.db.rollback()
+            return self.db.get(WorkflowRun, run_id)
         guard = 0
         while run.status in ("CREATED", "RUNNING"):
             guard += 1
@@ -179,6 +216,11 @@ class WorkflowEngine:
                 break
             try:
                 handler(run, st)
+            except StaleRun:
+                log.warning("workflow result discarded: run changed during a model call",
+                            extra={"run_id": str(run_id), "node": node})
+                self.db.rollback()
+                return self.db.get(WorkflowRun, run_id)
             except Exception as e:  # unrecoverable: make the failure visible and auditable
                 log.exception("workflow node crashed", extra={"run_id": str(run_id), "node": node})
                 self.db.rollback()
@@ -235,13 +277,14 @@ class WorkflowEngine:
             self._on_practice_answer(run, st, payload)
         else:
             raise AppError(409, "INVALID_RUN_STATE", f"Event {event_type} is not supported")
-        return self.advance(run_id)
+        return self.advance(run_id, own=True)
 
     # ------------------------------------------------------------------ nodes
     def _node_understand(self, run: WorkflowRun, st: WorkflowState) -> None:
         started = time.perf_counter()
         topics = self.core.topics(uuid.UUID(st.course_id))
-        out = understanding_agent.understand(self.provider, self.s, doubt_text=st.doubt_text, history=st.history, topics=topics)
+        out = self._offload(run, lambda: understanding_agent.understand(
+            self.provider, self.s, doubt_text=st.doubt_text, history=st.history, topics=topics))
         st.counters.llm_calls += out.run.attempts
         analysis = out.analysis
         st.analysis = analysis
@@ -265,7 +308,8 @@ class WorkflowEngine:
         query = " ".join([st.doubt_text, *st.history, topic_name]).strip()
         error = None
         try:
-            res = self.retriever.search(query, self.principal, course_id=uuid.UUID(st.course_id), top_k=6)
+            res = self.retriever.search(query, self.principal, course_id=uuid.UUID(st.course_id), top_k=6,
+                                        need_from=st.doubt_text)       # clarification replies widen the search, not the bar
             hits = res.hits
             support = RetrievalSupport(available=True, n_chunks_above_threshold=res.n_above_threshold,
                                        max_matched_terms=max((h.matched_terms for h in hits), default=0),
@@ -336,6 +380,9 @@ class WorkflowEngine:
     def _node_clarify(self, run: WorkflowRun, st: WorkflowState) -> None:
         started = time.perf_counter()
         q = (st.analysis.clarification_question if st.analysis else None) or understanding_agent.GENERIC_CLARIFICATION
+        if st.explained and st.counters.practice_sets > 0 and st.last_decision and st.last_decision.rule_id == "R10_default_clarify":
+            q = ("I could not verify your understanding from the practice so far. Tell me which part is still unclear, "
+                 "or ask for a teacher below.")
         st.counters.clarify_rounds += 1
         st.counters.actions_used += 1
         st.pending = Pending(kind="student_message")
@@ -349,8 +396,9 @@ class WorkflowEngine:
         st.counters.explain_attempts += 1
         st.counters.actions_used += 1
         hits = self.retriever.get_chunks([uuid.UUID(c) for c in st.context.chunk_ids], self.principal)
-        out = explanation_agent.explain(self.provider, self.s, doubt_text=" ".join([st.doubt_text, *st.history]),
-                                        analysis=st.analysis or DoubtAnalysis(), hits=hits, attempt=st.counters.explain_attempts)
+        out = self._offload(run, lambda: explanation_agent.explain(
+            self.provider, self.s, doubt_text=" ".join([st.doubt_text, *st.history]),
+            analysis=st.analysis or DoubtAnalysis(), hits=hits, attempt=st.counters.explain_attempts))
         st.counters.llm_calls += out.provider_calls
         payload = {"explanation": {"text": out.text, "citations": out.citations, "follow_up_check_offered": out.follow_up_offered},
                    "provider": self.provider.name, "model": self.provider.model, "provider_note": out.provider_note,
@@ -395,11 +443,13 @@ class WorkflowEngine:
         if st.counters.failed_checks > 0:
             difficulty = EASIER[difficulty]                 # after a failed check, ask easier questions
         tags = sorted(self.core.learner.error_tag_counts(sid, tid))
-        out = practice_agent.generate_practice(
+        seen = self.core.recent_prompt_hashes(sid, tid)
+        hyp_text = hyp.description if hyp else None
+        out = self._offload(run, lambda: practice_agent.generate_practice(
             self.provider, self.s, topic_id=topic_id, topic_slug=topic.slug, topic_name=topic.name,
             doubt_text=" ".join([st.doubt_text, *st.history]), hits=hits, count=self.s.practice_set_size,
-            difficulty=difficulty, hypothesis=hyp.description if hyp else None, error_tags=tags,
-            seen_prompt_hashes=self.core.recent_prompt_hashes(sid, tid))
+            difficulty=difficulty, hypothesis=hyp_text, error_tags=tags, seen_prompt_hashes=seen))
+        hyp = self.core.learner.open_hypothesis(sid, tid)      # re-read after the lock was released (it may have changed)
         st.counters.llm_calls += out.provider_calls
         if not out.items:
             return self._practice_unavailable(run, st, started, "no valid practice items could be generated",
@@ -436,7 +486,20 @@ class WorkflowEngine:
             raise AppError(409, "ITEM_ALREADY_ANSWERED", "This question has already been answered")
         item = self.core.get_item(attempt.item_id)
         started = time.perf_counter()
-        outcome = evaluation_agent.evaluate_answer(self.provider, self.s, self.core.for_grading(item), attempt.answer)
+        graded_item, answer = self.core.for_grading(item), attempt.answer
+        if item.kind in ("mcq", "numeric"):
+            outcome = evaluation_agent.evaluate_answer(self.provider, self.s, graded_item, answer)     # deterministic: no model call
+        else:
+            # free text may call the model: do it with no lock and no connection held, then revalidate against the FRESH state
+            # (another answer of the same set may have been applied meanwhile, which is fine; the same item may not)
+            outcome = self._offload(run, lambda: evaluation_agent.evaluate_answer(self.provider, self.s, graded_item, answer),
+                                    strict=False)
+            st = self._state(run)
+            if run.status != "AWAITING_ANSWER" or st.pending.kind != "practice_answer" or item_id not in st.practice.item_ids:
+                raise AppError(409, "INVALID_RUN_STATE", "The practice set changed while the answer was being graded")
+            self.db.refresh(attempt)
+            if item_id in st.practice.answered or attempt.status in SCORED_STATUSES:
+                raise AppError(409, "ITEM_ALREADY_ANSWERED", "This question has already been answered")
         if outcome.run is not None:
             st.counters.llm_calls += outcome.run.attempts
         self.core.save_grading(attempt, outcome)

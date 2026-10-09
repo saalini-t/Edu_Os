@@ -314,8 +314,15 @@ def test_model_supplied_topic_ids_are_not_trusted(app, client, student, admin, c
     prov = Scripted(understand_fn=lambda req: DoubtAnalysis(
         topic_id="11111111-1111-1111-1111-111111111111", clarity="clear", classification_confidence=0.99))
     r, t, v = run_with(app, client, student, admin, cn_course_id, prov)
-    a = [s for s in t["steps"] if s["node"] == "understand"][0]["output"]["analysis"]
-    assert a["topic_id"] is None and a["clarity"] == "ambiguous"
+    out = [s for s in t["steps"] if s["node"] == "understand"][0]["output"]
+    a, bogus = out["analysis"], "11111111-1111-1111-1111-111111111111"
+    assert a["topic_id"] != bogus                                    # the model's identifier is never trusted
+    notes = out["agent"]["notes"]
+    assert any("not in taxonomy; discarded" in n for n in notes)
+    if a["topic_id"] is not None:                                    # a topic may only come from deterministic keyword matching
+        assert any("keyword match" in n for n in notes)
+    else:
+        assert a["clarity"] == "ambiguous"
 
 
 def test_instructions_inside_documents_cannot_change_policy(client, student, admin, cn_course_id):

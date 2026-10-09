@@ -20,7 +20,7 @@ from app.main import create_app
 from app.models import Chunk, Document, IngestionJob
 from app.queue import QUEUE_KEY, WakeupQueue
 from app.worker import run_once, sweep
-from tests.conftest import TEST_DB, login, make_pdf
+from tests.conftest import TEST_DB, blank_pdf, login, make_pdf
 
 REDIS_URL = os.environ.get("TEST_REDIS_URL", "redis://127.0.0.1:63790/0")
 DEAD_REDIS = "redis://127.0.0.1:1/0"
@@ -115,11 +115,11 @@ def test_database_prevents_two_active_jobs_for_one_document(asettings, factory, 
 def test_permanent_failure_fails_fast_without_retries(asettings, factory, cn_course_id):
     c = aclient(asettings)
     s = login(c, "student1@demo.local")
-    d = up(c, s, cn_course_id, b"%PDF-1.4\nnot really a pdf").json()
+    d = up(c, s, cn_course_id, blank_pdf()).json()       # valid PDF without text: admitted, then fails deterministically
     assert d["status"] == "QUEUED"
     run_once(factory, asettings, "t")
     st = c.get(f"/v1/documents/{d['document_id']}", headers=s).json()
-    assert st["status"] == "FAILED" and st["error_code"] == "UNREADABLE_PDF" and st["indexed"] is False
+    assert st["status"] == "FAILED" and st["error_code"] == "NO_EXTRACTABLE_TEXT" and st["indexed"] is False
     assert st["job"]["status"] == "FAILED" and st["job"]["attempts"] == 1       # not retried: deterministic
     assert run_once(factory, asettings, "t") == 0
 
@@ -132,11 +132,11 @@ def test_transient_failure_retries_with_backoff_and_then_succeeds_without_duplic
     import app.knowledge.ingestion as ing_mod
     real, calls = ing_mod.parse_document, {"n": 0}
 
-    def flaky(data, settings):
+    def flaky(data, settings, **kw):
         calls["n"] += 1
         if calls["n"] == 1:
             raise OSError("disk hiccup")
-        return real(data, settings)
+        return real(data, settings, **kw)
     monkeypatch.setattr(ing_mod, "parse_document", flaky)
     assert run_once(factory, s2, "t") == 1
     j = job_of(factory, d["document_id"])

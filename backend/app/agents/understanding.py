@@ -25,6 +25,19 @@ def _specific_for(topics: list[TopicRef], topic_id: str, text: str) -> bool:
     return bool(t) and len(text.split()) >= 6 and any(k and k.lower() in low for k in [t.name, *t.keywords])
 
 
+def _keyword_topic(topics: list[TopicRef], text: str) -> tuple[str, int] | None:
+    """When the model names no valid topic: the topic whose name / keywords occur most often in the question, but only if
+    ONE topic clearly wins (a tie such as plain "TCP" across three TCP topics stays unmapped: that really is ambiguous)."""
+    low = text.lower()
+
+    def score(t: TopicRef) -> int:
+        return sum(1 for k in {t.name, *t.keywords} if k and re.search(r"(?<![a-z0-9])" + re.escape(k.lower()) + r"(?![a-z0-9])", low))
+    ranked = sorted(((score(t), t.id) for t in topics), reverse=True)
+    if ranked and ranked[0][0] >= 1 and (len(ranked) == 1 or ranked[0][0] > ranked[1][0]):
+        return ranked[0][1], ranked[0][0]
+    return None
+
+
 @dataclass
 class UnderstandingOutcome:
     analysis: DoubtAnalysis
@@ -44,9 +57,16 @@ def understand(provider: LLMProvider, settings: Settings, *, doubt_text: str, hi
     if value.topic_id not in ids:                       # never trust model-provided identifiers
         if value.topic_id is not None:
             run.notes.append("model topic_id not in taxonomy; discarded")
-        upd.update(topic_id=None, subtopic=None)
-        if value.clarity == "clear":
-            upd["clarity"] = "ambiguous"
+        guess = None if run.fallback else _keyword_topic(topics, " ".join([doubt_text, *history]))
+        if guess:                                       # deterministic and checkable: never an identifier the model made up
+            run.notes.append(f"model named no valid topic; chosen by keyword match ({guess[1]} hit(s))")
+            upd.update(topic_id=guess[0], subtopic=None)
+            if value.clarity == "ambiguous" and guess[1] >= 2:
+                upd["clarity"] = "clear"                # two distinct course terms: specific enough to answer
+        else:
+            upd.update(topic_id=None, subtopic=None)
+            if value.clarity == "clear":
+                upd["clarity"] = "ambiguous"
     upd["secondary_topic_ids"] = [t for t in value.secondary_topic_ids if t in ids]
     kept = [g for g in value.gap_hypotheses if g.topic_id in ids]
     if len(kept) != len(value.gap_hypotheses):

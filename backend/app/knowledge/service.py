@@ -67,7 +67,7 @@ class SearchResult:
 class Retriever(Protocol):
     """Interface kept stable so Phase 2 can add pgvector + RRF without touching the workflow."""
     def search(self, query: str, principal: Principal, *, course_id: uuid.UUID | None = None,
-               top_k: int = 6) -> SearchResult: ...
+               top_k: int = 6, need_from: str | None = None) -> SearchResult: ...
     def get_chunks(self, chunk_ids: list[uuid.UUID], principal: Principal) -> list[SearchHit]: ...
 
 
@@ -102,9 +102,12 @@ class PostgresFtsRetriever:
                          chunk.chunk_index, chunk.text, float(rank), int(matched))
 
     def search(self, query: str, principal: Principal, *, course_id: uuid.UUID | None = None,
-               top_k: int = 6) -> SearchResult:
+               top_k: int = 6, need_from: str | None = None) -> SearchResult:
+        """`need_from`: the text the support requirement is derived from (the student's ORIGINAL question). The query may be
+        longer (clarification replies widen the search), but extra words must never raise the number of terms a passage
+        has to match, otherwise every clarification round makes a good source harder to accept."""
         terms = query_terms(query)
-        need = max(1, min(self.min_terms, len(terms)))
+        need = max(1, min(self.min_terms, len(query_terms(need_from) if need_from else terms) or len(terms)))
         result = SearchResult(query=query, terms=terms, min_terms=need, min_sim=self.min_sim)
         if not terms or not principal.allowed_course_ids:
             return result
@@ -168,25 +171,6 @@ class KnowledgeService:
             ing.process_job(job.id)
             self.db.refresh(doc)
         return doc
-
-    def _embed_document(self, doc_id: uuid.UUID) -> None:
-        """Best effort: a document is searchable by full text as soon as it is READY. If embeddings are not
-        configured/available the chunks simply have no vector yet (visible via `missing_embeddings`)."""
-        from app.knowledge import vectors
-        from app.knowledge.embeddings import get_embedding_provider
-        try:
-            provider = get_embedding_provider(self.s)
-            model = vectors.active_model(self.db) if provider and vectors.vector_available(self.db) else None
-            if provider is None or model is None:
-                return
-            if model.name != provider.model:
-                log.warning("embedding model mismatch; not embedding new chunks",
-                            extra={"active": model.name, "configured": provider.model})
-                return
-            vectors.embed_missing(self.db, provider, model, batch_size=self.s.embedding_batch_size, document_id=doc_id)
-        except Exception as e:
-            self.db.rollback()
-            log.warning("embedding skipped", extra={"document_id": str(doc_id), "error": type(e).__name__})
 
     def delete_document(self, doc: Document, actor_id: uuid.UUID | None = None) -> None:
         """Immediately removes the document, its chunks, embeddings and jobs in ONE transaction (so it can never be

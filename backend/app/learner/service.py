@@ -8,7 +8,7 @@ import uuid
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.agents.evaluation import EvaluationOutcome
@@ -54,6 +54,13 @@ class LearnerService:
             GapHypothesis.student_id == student_id, GapHypothesis.topic_id == topic_id,
             GapHypothesis.status.in_(OPEN))) > 0
 
+    def trusted_positive(self, student_id: uuid.UUID, topic_id: uuid.UUID) -> int:
+        """Positive ledger rows that do NOT depend on a model's judgement: objectively graded attempts and teacher assessments."""
+        return self.db.scalar(select(func.count()).select_from(EvidenceEvent).where(
+            EvidenceEvent.student_id == student_id, EvidenceEvent.topic_id == topic_id,
+            or_(EvidenceEvent.evidence_type == "teacher_assessment_solid",
+                and_(EvidenceEvent.evidence_type == "attempt_correct", EvidenceEvent.provenance["grader"].astext == "exact")))) or 0
+
     def apply_row(self, ev: EvidenceEvent) -> dict | None:
         """Apply ONE ledger row to the cached posterior and append a history row. Idempotent per evidence id. Rows that carry
         no weight (acknowledgments, informational teacher notes) are ignored by construction."""
@@ -73,7 +80,8 @@ class LearnerService:
         else:
             row.alpha, row.beta, row.evidence_count = post.alpha, post.beta, post.evidence_count
             row.sources, row.last_evidence_at = post.sources, post.last_at
-        status = m.status(post, ev.created_at, self.p, self.has_open_hypothesis(ev.student_id, ev.topic_id))
+        status = m.status(post, ev.created_at, self.p, self.has_open_hypothesis(ev.student_id, ev.topic_id),
+                          self.trusted_positive(ev.student_id, ev.topic_id))
         self.db.add(MasteryHistory(student_id=ev.student_id, topic_id=ev.topic_id, evidence_id=ev.id, alpha=post.alpha,
                                    beta=post.beta, mean=m.mean(post.alpha, post.beta), status=status,
                                    evidence_count=post.evidence_count, distinct_sources=len(post.sources)))
@@ -92,7 +100,8 @@ class LearnerService:
         now = now or _now()
         post = self._posterior(self._row(student_id, topic_id), self.p)
         a, b = m.decayed(post, now, self.p)
-        return {"status": m.status(post, now, self.p, self.has_open_hypothesis(student_id, topic_id)),
+        return {"status": m.status(post, now, self.p, self.has_open_hypothesis(student_id, topic_id),
+                                    self.trusted_positive(student_id, topic_id)),
                 "mean": round(m.mean(a, b), 4), "alpha": round(a, 4), "beta": round(b, 4),
                 "evidence_count": post.evidence_count, "distinct_sources": len(post.sources),
                 "last_evidence_at": post.last_at}

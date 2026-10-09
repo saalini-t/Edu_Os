@@ -18,6 +18,7 @@ from app.errors import AppError, Forbidden, NotFound
 from app.agents.evaluation import resolve_mcq_choice
 from app.api_idempotency import run_idempotent
 from app.learner.service import LearnerService
+from app.ratelimit import rate_limit
 from app.models import Attempt, DoubtSession, IdempotencyKey, PracticeItem, Topic, User, WorkflowRun
 from app.workflow.engine import WorkflowEngine
 from app.workflow.explain import decision_explanations
@@ -82,7 +83,7 @@ def session_view(db: Session, s: DoubtSession, *, admin: bool) -> dict:
     }
 
 
-@router.post("/doubts", status_code=202)
+@router.post("/doubts", status_code=202, dependencies=[Depends(rate_limit("doubts", "llm_actions"))])
 def create_doubt(body: DoubtIn, request: Request, key: str = Depends(idempotency_key),
                  user: User = Depends(require_roles("student")), db: Session = Depends(get_db)):
     principal = principal_for(db, user)
@@ -144,7 +145,7 @@ def doubt_decisions(session_id: str, user: User = Depends(require_roles("student
     return {"items": items, "note": "Built from recorded rules and evidence only. A language model never makes these decisions."}
 
 
-@router.post("/doubts/{session_id}/messages", status_code=202)
+@router.post("/doubts/{session_id}/messages", status_code=202, dependencies=[Depends(rate_limit("llm_actions"))])
 def post_message(session_id: str, body: MessageIn, request: Request,
                  user: User = Depends(require_roles("student")), db: Session = Depends(get_db)):
     s = _load_session(db, user, session_id)
@@ -157,7 +158,7 @@ class AckIn(BaseModel):
     ack: Literal["understood", "still_confused", "check_me"]
 
 
-@router.post("/doubts/{session_id}/ack", status_code=202)
+@router.post("/doubts/{session_id}/ack", status_code=202, dependencies=[Depends(rate_limit("llm_actions"))])
 def acknowledge(session_id: str, body: AckIn, request: Request, key: str = Depends(idempotency_key),
                 user: User = Depends(require_roles("student")), db: Session = Depends(get_db)):
     """The student says whether the explanation helped. This is recorded in the evidence ledger as a SELF-REPORT with
@@ -192,7 +193,7 @@ def acknowledge(session_id: str, body: AckIn, request: Request, key: str = Depen
     return response
 
 
-@router.post("/doubts/{session_id}/request-teacher", status_code=202)
+@router.post("/doubts/{session_id}/request-teacher", status_code=202, dependencies=[Depends(rate_limit("llm_actions"))])
 def request_teacher(session_id: str, request: Request, user: User = Depends(require_roles("student")),
                     db: Session = Depends(get_db)):
     s = _load_session(db, user, session_id)
@@ -207,7 +208,7 @@ class AnswerIn(BaseModel):
     hints_used: int = Field(default=0, ge=0, le=5)
 
 
-@router.post("/doubts/{session_id}/answers", status_code=200)
+@router.post("/doubts/{session_id}/answers", status_code=200, dependencies=[Depends(rate_limit("llm_actions"))])
 def submit_answer(session_id: str, body: AnswerIn, request: Request, key: str = Depends(idempotency_key),
                   user: User = Depends(require_roles("student")), db: Session = Depends(get_db)):
     """Submit ONE practice answer. The answer is graded (objective items deterministically), evidence is written to the ledger
@@ -225,10 +226,22 @@ def submit_answer(session_id: str, body: AnswerIn, request: Request, key: str = 
     def go() -> dict:
         if db.scalar(select(Attempt.id).where(Attempt.item_id == item.id, Attempt.status.in_(SCORED))) is not None:
             raise AppError(409, "ITEM_ALREADY_ANSWERED", "This question has already been answered")
-        att = Attempt(item_id=item.id, student_id=user.id, session_id=s.id, run_id=s.run_id, answer=body.answer.strip(),
-                      hints_used=body.hints_used, idempotency_key=key, status="SUBMITTED")
-        db.add(att)
-        db.flush()
+        prior = db.scalar(select(Attempt).where(Attempt.student_id == user.id, Attempt.idempotency_key == key))
+        if prior is not None:
+            # a retry after a crash or timeout: the attempt was committed before the slow grading step. Reuse it; never create a
+            # second row for the same Idempotency-Key.
+            if prior.item_id != item.id or prior.answer != body.answer.strip():
+                raise AppError(409, "IDEMPOTENCY_KEY_REUSED", "Idempotency-Key was used with a different request")
+            att = prior
+            if att.status in SCORED:
+                run = db.get(WorkflowRun, s.run_id)
+                return {**attempt_view(att, item), "item_id": str(item.id), "run_status": run.status if run else None,
+                        "remaining": None, "mastery": None}
+        else:
+            att = Attempt(item_id=item.id, student_id=user.id, session_id=s.id, run_id=s.run_id, answer=body.answer.strip(),
+                          hints_used=body.hints_used, idempotency_key=key, status="SUBMITTED")
+            db.add(att)
+            db.flush()
         try:
             run = _engine(request, db, user).apply_event(s.run_id, "practice_answer", {"attempt_id": str(att.id)})
         except IntegrityError:                               # lost a race with a concurrent scored attempt on the same item

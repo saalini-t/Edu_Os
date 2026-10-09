@@ -22,9 +22,12 @@ from app.errors import install_error_handlers
 from app.knowledge.router import router as knowledge_router
 from app.learner.router import router as learner_router
 from app.teaching.router import router as teaching_router
+from app.llm.base import configure_limits
 from app.llm.factory import build_provider
+from app.ratelimit import build_limiters
 from app.logging_setup import setup_logging
 from app.queue import WakeupQueue
+from app.upload_guard import UploadSizeGuard
 from app.workflow.router import router as doubts_router
 
 log = logging.getLogger("eduos.http")
@@ -49,13 +52,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.session_factory = make_session_factory(app.state.engine)
     app.state.wakeup_queue = WakeupQueue(settings.redis_url)
     app.state.llm_provider = build_provider(settings)
+    configure_limits(settings.llm_max_concurrency, settings.llm_queue_wait_s)
+    app.state.limiters = build_limiters(settings)
     if hasattr(app.state.llm_provider, "warm") and settings.app_env != "test":
         threading.Thread(target=app.state.llm_provider.warm, daemon=True, name="llm-warmup").start()   # non-blocking
     log.info("startup", extra={"llm_provider": app.state.llm_provider.name,
                                "env": settings.app_env})
 
+    app.add_middleware(UploadSizeGuard, max_file_bytes=settings.max_upload_bytes)    # innermost: CORS headers still reach a 413
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origin_list, allow_credentials=False,
-                       allow_methods=["GET", "POST", "DELETE"],
+                       allow_methods=["GET", "POST", "PUT", "DELETE"],
                        allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Trace-Id"])
 
     @app.middleware("http")

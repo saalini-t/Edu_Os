@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -69,31 +70,54 @@ def missing_count(db: Session, model_id: uuid.UUID) -> int:
         "WHERE e.chunk_id = c.id AND e.model_id = :m)"), {"m": model_id}).scalar() or 0
 
 
+def missing_for(db: Session, model_id: uuid.UUID, document_id: uuid.UUID, version: int) -> int:
+    """Chunks of ONE document version that have no vector yet (the durable embedding progress, derived from the data)."""
+    return db.execute(text(
+        "SELECT count(*) FROM know.chunks c WHERE c.document_id = :d AND c.ingestion_version = :v AND NOT EXISTS ("
+        "SELECT 1 FROM know.chunk_embeddings e WHERE e.chunk_id = c.id AND e.model_id = :m)"),
+        {"d": document_id, "v": version, "m": model_id}).scalar() or 0
+
+
 def embed_missing(db: Session, provider, model: EmbeddingModel, *, batch_size: int = 16,
-                  document_id: uuid.UUID | None = None) -> int:
-    """Embed chunks that lack a vector for `model`. Idempotent and resumable (ON CONFLICT DO NOTHING)."""
+                  document_id: uuid.UUID | None = None, version: int | None = None,
+                  max_seconds: float | None = None, guard=None) -> int:
+    """Embed chunks that lack a vector for `model`. Idempotent and resumable (ON CONFLICT DO NOTHING).
+
+    Default scope: chunks of READY documents at their live version (evaluation, CLI re-embedding). With `version` the
+    scope is exactly that version of `document_id` whatever the document status (staged chunks of a new version, or a
+    document that is still INDEXING). Memory is bounded by `batch_size` rows. `max_seconds` stops after the batch that
+    crosses the deadline (at least one batch is always done, so every call makes progress). `guard(db)` runs inside each
+    batch's write transaction BEFORE the insert and may raise to abort: it is how the job's lease owner is verified."""
     if provider.model != model.name or provider.dims != model.dims:
         raise ValueError("embedding provider does not match the model record (refusing to mix vectors)")
+    scope = ("c.document_id = :doc AND c.ingestion_version = :ver" if version is not None else
+             "d.status = 'READY' AND c.ingestion_version = d.ingestion_version AND (:doc IS NULL OR c.document_id = :doc)")
+    deadline = None if max_seconds is None else time.monotonic() + max_seconds
     total = 0
     while True:
         rows = db.execute(text(
             "SELECT c.id, c.text FROM know.chunks c JOIN know.documents d ON d.id = c.document_id "
-            "WHERE d.status = 'READY' AND c.ingestion_version = d.ingestion_version "
-            "AND (:doc IS NULL OR c.document_id = :doc) AND NOT EXISTS ("
+            f"WHERE {scope} AND NOT EXISTS ("
             "SELECT 1 FROM know.chunk_embeddings e WHERE e.chunk_id = c.id AND e.model_id = :m) "
             "ORDER BY c.document_id, c.chunk_index LIMIT :n"),
-            {"doc": document_id, "m": model.id, "n": batch_size}).all()
+            {"doc": document_id, "ver": version, "m": model.id, "n": batch_size}).all()
         if not rows:
             return total
+        db.commit()                      # no transaction (or snapshot) is held open while the model runs
         vecs = provider.embed_documents([r.text for r in rows])
-        for r, v in zip(rows, vecs):
+        for v in vecs:
             if len(v) != model.dims:
                 raise ValueError(f"embedding has {len(v)} dims, model record says {model.dims}")
+        if guard is not None:
+            guard(db)                    # same transaction as the insert below: owner check + lease renewal + row lock
+        for r, v in zip(rows, vecs):
             db.execute(text("INSERT INTO know.chunk_embeddings (chunk_id, model_id, embedding) "
                             "VALUES (:c, :m, CAST(:v AS vector)) ON CONFLICT DO NOTHING"),
                        {"c": r.id, "m": model.id, "v": vec_literal(v)})
         db.commit()
         total += len(rows)
+        if deadline is not None and time.monotonic() >= deadline:
+            return total
 
 
 def activate_model(db: Session, model: EmbeddingModel) -> None:

@@ -11,7 +11,7 @@ from app.llm.schemas import (
 )
 
 
-MAX_TOKENS = {"understand": 300, "explain": 800, "practice": 1600, "evaluate": 350}   # output caps: a looping model cannot run for minutes
+MAX_TOKENS = {"understand": 300, "explain": 1200, "practice": 1600, "evaluate": 350}   # output caps: a looping model cannot run for minutes
 
 
 class PromptedProvider:

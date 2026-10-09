@@ -60,7 +60,9 @@ def anonymize_student(db: Session, settings: Settings, student_id: uuid.UUID, ac
     counts["sessions_deleted"] = db.execute(delete(DoubtSession).where(DoubtSession.student_id == student_id)).rowcount
     db.execute(delete(Enrollment).where(Enrollment.student_id == student_id))
     db.execute(delete(IdempotencyKey).where(IdempotencyKey.scope.like(f"%{student_id}%")))
+    db.execute(text("SELECT set_config('eduos.anonymizing', 'on', true)"))      # the audit trigger allows exactly actor_id -> NULL
     db.execute(update(AuditEvent).where(AuditEvent.actor_id == student_id).values(actor_id=None))
+    db.execute(text("SELECT set_config('eduos.anonymizing', 'off', true)"))
 
     # 4. remove the account itself and leave a metadata-only audit record
     db.delete(student)

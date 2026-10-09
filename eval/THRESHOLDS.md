@@ -147,3 +147,21 @@ Because the test split has been looked at this many times (always for reporting)
 | `RET_MIN_SIM` | 0.6 for `all-MiniLM-L6-v2` only | `.env.example` (unset in code) | dev-selected at the grid edge; model-specific |
 | RRF `k`, candidate pool | 60, 20 | code defaults | fixed a priori, never tuned |
 | `T_CLARIFY`, `T_MASTER`, `N_MIN` | 0.5, 0.8, 3 | code defaults | **untuned**; depend on a real LLM / the Phase 4 learner model |
+
+
+## Phase 3–5 additions (mastery and escalation parameters)
+
+| Parameter | Value | Status |
+|---|---|---|
+| Mastery model | Beta-Bernoulli, prior alpha0 = beta0 = 1, exponential decay with half-life `MASTERY_HALF_LIFE_DAYS` = 14 | design choice, not fitted |
+| `T_MASTER` | 0.75 (lowered from 0.8 so three clean correct answers can pass) | **untuned** |
+| `N_MIN`, distinct sources | 3 evidence items from >= 2 distinct items/assessments | **untuned** |
+| Attempt weights | exact-graded 1.0, model-graded less (`W_LLM`), easy items reduced, hints reduce | **untuned** |
+| Model-grade evidence gate | grader uncertainty must be <= 0.5 to count | **untuned** |
+| Teacher assessment weight `W_TEACHER` | 2.0 (bounded <= 3); "emerging" carries zero weight | **untuned** |
+| Gap confirmation | 2 failed attempts on distinct targeted items, or a teacher decision | policy (not a fitted value) |
+| Gap Map "improving" | emerging with mean >= 0.6 | **untuned** |
+| Escalation TTL | 48 h | arbitrary default |
+| Matching weights | topic 0.4, availability 0.25, language 0.15, feedback 0.1, load 0.1 | **untuned**, deterministic |
+
+None of these were validated on real learner data. No real learner data exists for this prototype.

@@ -15,7 +15,7 @@ from app.knowledge.retrieval import build_retriever
 from app.main import create_app
 from app.models import Chunk, Course, Document, DocumentEvent, IngestionJob, User
 from app.worker import run_once
-from tests.conftest import login, make_pdf
+from tests.conftest import blank_pdf, login, make_pdf
 
 
 @pytest.fixture
@@ -102,11 +102,12 @@ def test_replacement_swaps_versions_atomically_and_leaves_no_obsolete_chunks(env
 def test_failed_replacement_does_not_corrupt_the_live_version(env, storage_dir):
     doc = ready(env, pdf("livever"))
     before = chunk_ids(env.factory, doc)
-    assert put_file(env, env.s, doc, b"%PDF-1.4\nthis is garbage, not a pdf").status_code == 202
+    assert put_file(env, env.s, doc, b"%PDF-1.4\nthis is garbage, not a pdf").status_code == 422      # refused at admission
+    assert put_file(env, env.s, doc, blank_pdf()).status_code == 202                                   # valid, no text: fails in the worker
     run_once(env.factory, env.settings, "w")
     st = env.c.get(f"/v1/documents/{doc}", headers=env.s).json()
     assert st["status"] == "READY" and st["version"] == 1 and st["error_code"] is None      # live doc untouched
-    assert st["job"]["status"] == "FAILED" and st["job"]["error_code"] == "UNREADABLE_PDF"
+    assert st["job"]["status"] == "FAILED" and st["job"]["error_code"] == "NO_EXTRACTABLE_TEXT"
     assert chunk_ids(env.factory, doc) == before
     assert any("liveverzork" in t for t in search_text(env, env.s, "liveverzork"))
     assert not (storage_dir / f"{doc}.v2.pdf").exists()                                      # failed upload cleaned up
@@ -123,11 +124,11 @@ def test_transient_failure_during_replacement_keeps_serving_the_old_version(env,
     import app.knowledge.ingestion as ing
     real, n = ing.parse_document, {"n": 0}
 
-    def flaky(data, settings):
+    def flaky(data, settings, **kw):
         n["n"] += 1
         if n["n"] == 1:
             raise OSError("disk hiccup")
-        return real(data, settings)
+        return real(data, settings, **kw)
     monkeypatch.setattr(ing, "parse_document", flaky)
     slow = env.settings.model_copy(update={"job_retry_backoff_seconds": 30.0})
     run_once(env.factory, slow, "w")                               # attempt 1 fails, job re-queued with a 30 s backoff

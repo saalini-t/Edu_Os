@@ -93,7 +93,7 @@ function TraceView({ rid }: { rid: string }) {
               <tbody>{tr.steps.map((s) => <tr key={s.seq}><td>{s.seq}</td><td>{s.node}{s.error && <div className="small" style={{ color: "var(--bad)" }}>{s.error}</div>}</td><td>{s.provider ? `${s.provider} / ${s.model ?? ""} (${s.prompt_version ?? ""})` : "—"}</td><td>{s.latency_ms}</td></tr>)}</tbody></table></div>
           <div className="card"><h4>Retrieval</h4>
             {tr.retrieval.length === 0 ? <p className="muted small">No retrieval in this run.</p> : tr.retrieval.map((r, i) => (
-              <div key={i}><p className="small">“{r.query}” · mode <b>{r.mode ?? "?"}</b></p>
+              <div key={i}><p className="small">“{r.query}” · mode <b>{r.mode?.used ?? "?"}</b>{r.mode?.degraded ? <> · <Badge tone="warn">degraded: {r.mode.fallback_reason ?? "fallback"}</Badge></> : null}{r.mode?.embedding_model ? <span className="muted"> · {r.mode.embedding_model}</span> : null}</p>
                 <ul className="small">{r.results.map((c) => <li key={c.chunk_id}>{c.chunk_id.slice(0, 8)} · page {c.page}</li>)}</ul></div>))}</div>
           <div className="card"><h4>Citation validation</h4>
             {tr.citation_validation.length === 0 ? <p className="muted small">No explanation in this run.</p> : tr.citation_validation.map((v, i) => (

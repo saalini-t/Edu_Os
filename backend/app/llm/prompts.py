@@ -37,7 +37,7 @@ def understand(req: UnderstandRequest) -> tuple[str, str]:
 
 def explain(req: ExplainRequest) -> tuple[str, str]:
     system = (f"You explain Computer Networks concepts to a student using ONLY the supplied passages. {_RULES}\n"
-              "Set insufficient_context=false normally. Write a clear, correct explanation in your own words. Cite with numbered markers [1], [2] in the text, and list each "
+              "Set insufficient_context=false normally. Write a clear, correct explanation of at most 180 words in your own words. Cite with numbered markers [1], [2] in the text, and list each "
               "citation as {chunk_id, quote} where quote is copied EXACTLY (character for character) from that passage. "
               "If the passages do not contain enough information, set insufficient_context=true, say so briefly, and give no "
               "citations. Never invent facts that are not supported by the passages. Do not claim anything about the student's mastery.")

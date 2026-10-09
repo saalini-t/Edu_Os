@@ -30,8 +30,12 @@ class Settings(BaseSettings):
     jwt_secret: str = Field(min_length=32)
     jwt_ttl_minutes: int = Field(default=60, ge=1, le=24 * 60)
     storage_dir: str = "./storage"
-    max_upload_bytes: int = 10 * 1024 * 1024
-    max_pdf_pages: int = 200
+    # Upload admission limits (docs/PHASE_H2_IMPLEMENTATION.md). Size is enforced at the HTTP edge on Content-Length AND on
+    # the bytes actually received; pages/encryption/validity are checked by a sandboxed probe before anything is stored.
+    # Measured: 4.2 MB / 500 digital pages, 6.5-8 MB / 200 figure-heavy pages, 15.6 MB / 100 densest pages (worst ~0.16 MB/page).
+    max_upload_bytes: int = 50 * 1024 * 1024
+    max_pdf_pages: int = 200       # raised only after a full-pipeline measurement at the new value
+    parser_timeout_per_page_s: float = Field(default=0.5, ge=0)   # added to parser_timeout_s per page (figure-heavy ~0.15 s/page)
     chunk_words: int = Field(default=120, ge=20)
     chunk_overlap_words: int = Field(default=20, ge=0)
     cors_origins: str = "http://localhost:5173"
@@ -57,7 +61,8 @@ class Settings(BaseSettings):
     ingestion_mode: Literal["sync", "async"] = "async"
     redis_url: str | None = None              # wake-up queue only; PostgreSQL is the source of truth for jobs
     job_max_attempts: int = Field(default=3, ge=1, le=10)
-    job_lease_seconds: int = Field(default=120, ge=5)
+    job_lease_seconds: int = Field(default=30, ge=5)               # renewed by heartbeat / every batch; a dead worker is recovered after ~this long
+    embed_slice_seconds: float = Field(default=10.0, gt=0)          # one claim embeds at most this long, then yields to other jobs
     job_retry_backoff_seconds: float = Field(default=5.0, ge=0)   # attempt n waits backoff * 2^(n-1)
     worker_poll_seconds: float = Field(default=2.0, gt=0)
     worker_sweep_seconds: float = Field(default=15.0, gt=0)
@@ -105,6 +110,17 @@ class Settings(BaseSettings):
     hypothesis_refute_successes: int = Field(default=2, ge=2)
     hypothesis_expiry_days: int = Field(default=30, ge=1)
     error_tag_window_days: int = Field(default=14, ge=1)
+
+    # Abuse and resource controls (Phase 1 hardening). A limit of 0 disables that limit.
+    llm_max_concurrency: int = Field(default=4, ge=1, le=64)          # simultaneous model calls in this process
+    llm_queue_wait_s: float = Field(default=20.0, ge=0)               # wait for a free slot, then fail fast as "busy"
+    rate_llm_actions_per_min: int = Field(default=30, ge=0)           # per user: actions that can trigger model calls
+    rate_doubts_per_hour: int = Field(default=60, ge=0)               # per user: new doubts
+    login_max_failures: int = Field(default=10, ge=0)                 # per e-mail within the window, then 429
+    login_window_minutes: int = Field(default=15, ge=1)
+    workflow_lease_seconds: int = Field(default=600, ge=30)           # a RUNNING run untouched this long is considered crashed
+    grader_min_lexical_support: float = Field(default=0.4, ge=0, le=1)  # key-term coverage a positive model verdict must show
+    mastery_min_trusted_positive: int = Field(default=1, ge=0)       # positives from exact grading or a teacher needed for "demonstrated"
 
     # Teacher matching and escalation
     escalation_ttl_hours: int = Field(default=48, ge=1)             # unanswered escalations expire; the run ends UNRESOLVED

@@ -1,5 +1,8 @@
 # EduOS Evaluation Plan
 
+> **Scope update (Phases 3–5):** Jev is no longer in scope. Sections that discuss Jev / `JevDecisionProvider` are kept only as the historical record of ADR-001; nothing in the code depends on it and no Jev configuration exists. The deterministic R1–R10 engine is the only decision-maker; a decision-provider experiment may be added in a future phase. The as-built description is in [PHASE3_5_ACCEPTANCE.md](PHASE3_5_ACCEPTANCE.md).
+
+
 | | |
 |---|---|
 | **Status** | Design (sections 1–10) plus an **implemented retrieval/citation/insufficient-context evaluation (section 11)**. Everything else in this plan (explanation quality, assessment, teacher matching, learner model, Jev experiment, fault injection beyond what the test suite covers) is **not implemented**. Numbers appear only in section 11 and in the saved reports. |

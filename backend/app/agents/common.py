@@ -2,8 +2,11 @@
 policy and reports provider, model, prompt version, attempts, latency and error so the workflow trace can show them."""
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
+
+from pydantic import BaseModel
 
 from app.config import Settings
 from app.llm.base import LLMProvider, call_with_policy
@@ -26,10 +29,25 @@ class AgentRun:
                 "notes": self.notes}
 
 
+_DELIMITERS = re.compile(r"</?(doubt|answer|history|passage)[^>]*>", re.I)
+
+
+def strip_delimiters(value: Any) -> Any:
+    """Small models echo the <doubt> / <passage> tags we wrap untrusted text in. They are prompt plumbing, never content a
+    student should see, so they are removed from every string of a validated model output (recursively)."""
+    if isinstance(value, str):
+        return _DELIMITERS.sub("", value).strip()
+    if isinstance(value, BaseModel):
+        return value.model_copy(update={n: strip_delimiters(getattr(value, n)) for n in type(value).model_fields})
+    if isinstance(value, list):
+        return [strip_delimiters(v) for v in value]
+    return value
+
+
 def call_provider(provider: LLMProvider, settings: Settings, op: str, fn: Callable[[], Any], schema: type) -> tuple[Any, AgentRun]:
     """Returns (validated value or None, AgentRun). Never raises."""
     res = call_with_policy(fn, schema, timeout_s=settings.llm_timeout_s, max_retries=settings.llm_max_retries,
                            provider=provider.name)
     run = AgentRun(provider=provider.name, model=provider.model, prompt_version=provider.prompt_version(op),
                    attempts=res.attempts, latency_ms=res.latency_ms, error=res.error)
-    return res.value, run
+    return strip_delimiters(res.value), run

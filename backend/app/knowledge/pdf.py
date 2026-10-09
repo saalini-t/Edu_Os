@@ -95,28 +95,36 @@ def extract_document(data: bytes, *, max_pages: int, ocr=None, min_chars: int = 
     return Extraction(pages, getattr(ocr, "name", None))
 
 
+def probe_document(data: bytes, max_pages: int) -> int:
+    """Admission check, no text extraction: a readable, unencrypted PDF within the page budget. Returns its page count."""
+    try:
+        reader = PdfReader(io.BytesIO(data))
+        if reader.is_encrypted:
+            raise PdfError("ENCRYPTED_PDF", "Encrypted PDFs are not supported")
+        n = len(reader.pages)
+    except PdfError:
+        raise
+    except (PyPdfError, ValueError, KeyError, TypeError, OSError, RecursionError) as e:
+        raise PdfError("UNREADABLE_PDF", f"Could not parse PDF ({type(e).__name__})")
+    if n == 0:
+        raise PdfError("UNREADABLE_PDF", "PDF has no pages")
+    if n > max_pages:
+        raise PdfError("TOO_MANY_PAGES", f"PDF has {n} pages; the limit is {max_pages}")
+    return n
+
+
 def extract_pages(data: bytes, max_pages: int) -> list[str]:
     """Text-layer-only extraction (kept for evaluation scripts and tests)."""
     return extract_document(data, max_pages=max_pages).texts()
 
 
 # ------------------------------------------------------------------------------------------ sandboxed parsing
-def parse_document(data: bytes, settings) -> Extraction:
-    """Parse an untrusted PDF according to settings: inline, or in a child process with a timeout (and, on POSIX, an
-    address-space limit) so a malicious or pathological file cannot take the worker/API down."""
-    params = {"max_pages": settings.max_pdf_pages, "ocr_engine": settings.ocr_engine,
-              "min_chars": settings.ocr_min_text_chars, "max_ocr_pages": settings.ocr_max_pages,
-              "dpi": settings.ocr_dpi, "max_pixels": settings.ocr_max_pixels, "memory_mb": settings.parser_memory_mb}
-    if settings.parser_isolation == "inline":
-        from app.knowledge.ocr import get_ocr_engine
-        return extract_document(data, max_pages=params["max_pages"], ocr=get_ocr_engine(params["ocr_engine"]),
-                                min_chars=params["min_chars"], max_ocr_pages=params["max_ocr_pages"],
-                                dpi=params["dpi"], max_pixels=params["max_pixels"])
+def _run_child(params: dict, data: bytes, timeout: float) -> dict:
     try:
         proc = subprocess.run([sys.executable, "-m", "app.knowledge.parse_child", json.dumps(params)], input=data,
-                              capture_output=True, timeout=settings.parser_timeout_s)
+                              capture_output=True, timeout=timeout)
     except subprocess.TimeoutExpired:
-        raise PdfError("PARSER_TIMEOUT", f"parsing exceeded {settings.parser_timeout_s:.0f}s and was killed")
+        raise PdfError("PARSER_TIMEOUT", f"parsing exceeded {timeout:.0f}s and was killed")
     if proc.returncode != 0:
         err = proc.stderr.decode("utf-8", "replace")
         if "MemoryError" in err:
@@ -128,4 +136,29 @@ def parse_document(data: bytes, settings) -> Extraction:
         raise PdfError("PARSER_CRASHED", "parser produced invalid output")
     if not out.get("ok"):
         raise PdfError(out.get("code", "UNREADABLE_PDF"), out.get("message", "parse failed"))
+    return out
+
+
+def probe_pdf(data: bytes, settings) -> int:
+    """Upload-time admission: same sandbox as parsing, but only opens the file (page count, encryption, validity)."""
+    if settings.parser_isolation == "inline":
+        return probe_document(data, settings.max_pdf_pages)
+    out = _run_child({"probe": True, "max_pages": settings.max_pdf_pages, "memory_mb": settings.parser_memory_mb}, data,
+                     min(settings.parser_timeout_s, 20.0))
+    return int(out["pages"])
+
+
+def parse_document(data: bytes, settings, pages: int | None = None) -> Extraction:
+    """Parse an untrusted PDF according to settings: inline, or in a child process with a timeout (and, on POSIX, an
+    address-space limit) so a malicious or pathological file cannot take the worker/API down. `pages` (known from the
+    admission probe) scales the timeout: parser_timeout_s + parser_timeout_per_page_s * pages."""
+    params = {"max_pages": settings.max_pdf_pages, "ocr_engine": settings.ocr_engine,
+              "min_chars": settings.ocr_min_text_chars, "max_ocr_pages": settings.ocr_max_pages,
+              "dpi": settings.ocr_dpi, "max_pixels": settings.ocr_max_pixels, "memory_mb": settings.parser_memory_mb}
+    if settings.parser_isolation == "inline":
+        from app.knowledge.ocr import get_ocr_engine
+        return extract_document(data, max_pages=params["max_pages"], ocr=get_ocr_engine(params["ocr_engine"]),
+                                min_chars=params["min_chars"], max_ocr_pages=params["max_ocr_pages"],
+                                dpi=params["dpi"], max_pixels=params["max_pixels"])
+    out = _run_child(params, data, settings.parser_timeout_s + settings.parser_timeout_per_page_s * (pages or 0))
     return Extraction([PageResult(**p) for p in out["pages"]], out.get("ocr_engine"))

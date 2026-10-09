@@ -108,13 +108,11 @@ def test_rejects_non_pdf_and_oversized_files(client, student, cn_course_id, sett
     assert r.status_code == 413 and r.json()["error"]["code"] == "FILE_TOO_LARGE"
 
 
-def test_unreadable_pdf_fails_clearly_and_is_recorded(client, student, cn_course_id):
+def test_unreadable_pdf_is_rejected_at_admission_and_nothing_is_stored(client, student, cn_course_id, db):
+    before = db.execute(text("select count(*) from know.documents")).scalar()
     r = upload(client, student, cn_course_id, b"%PDF-1.4\nthis is not really a pdf at all")
-    assert r.status_code == 422
-    err = r.json()["error"]
-    assert err["code"] == "INGESTION_FAILED" and err["details"]["error_code"] == "UNREADABLE_PDF"
-    doc = client.get(f"/v1/documents/{err['details']['document_id']}", headers=student).json()
-    assert doc["status"] == "FAILED" and doc["error_code"] == "UNREADABLE_PDF" and doc["chunk_count"] is None
+    assert r.status_code == 422 and r.json()["error"]["code"] == "UNREADABLE_PDF"
+    assert db.execute(text("select count(*) from know.documents")).scalar() == before      # no document, no job, no file
 
 
 def test_empty_pdf_fails_clearly(client, student, cn_course_id):

@@ -22,6 +22,14 @@ def main() -> int:
     params = json.loads(sys.argv[1])
     _limit_memory(int(params.get("memory_mb", 0)))
     data = sys.stdin.buffer.read()
+    if params.get("probe"):                   # admission check only: no OCR import, no text extraction
+        from app.knowledge.pdf import PdfError, probe_document
+        try:
+            out = {"ok": True, "pages": probe_document(data, params["max_pages"])}
+        except PdfError as e:
+            out = {"ok": False, "code": e.code, "message": str(e)}
+        sys.stdout.write(json.dumps(out))
+        return 0
     from app.knowledge.ocr import get_ocr_engine
     from app.knowledge.pdf import PdfError, extract_document
     try:

@@ -5,9 +5,10 @@ internal schemas. Unknown fields are still rejected and every mapped value is st
 from __future__ import annotations
 
 import math
+import re
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import ValidationError, field_validator
 
 from app.llm.schemas import (
     Citation, DoubtAnalysis, EvaluationOut, Explanation, GapHypothesisDraft, PracticeItemDraft, PracticeSet, Strict,
@@ -62,17 +63,45 @@ class SlimItem(Strict):
     source_chunk_ids: list[str] = []
 
 
+_LETTERED = re.compile(r"^\s*\(?([A-E])[.)]\s+(.+?)\s*$", re.M)
+
+
+def _salvage(i: "SlimItem") -> "SlimItem":
+    """Small models often put 'A) ... B) ...' inside the prompt, answer with a letter, or omit the rubric. These are repaired
+    deterministically (nothing is invented); anything still malformed is rejected by the strict schema and the agent validators."""
+    upd: dict = {}
+    if i.kind == "mcq" and len(i.options) < 2:
+        found = _LETTERED.findall(i.prompt)
+        if len(found) >= 3:
+            upd["options"] = [t for _, t in found]
+            upd["prompt"] = _LETTERED.sub("", i.prompt).strip()
+            letter = re.match(r"^\(?([A-E])\)?[.)]?$", i.answer_key.strip(), re.I)
+            if letter:
+                idx = ord(letter.group(1).upper()) - 65
+                if idx < len(found):
+                    upd["answer_key"] = found[idx][1]
+    if i.kind == "short_text" and not i.rubric.strip():
+        upd["rubric"] = "A correct answer conveys the key points of the reference answer: " + i.answer_key[:300]
+    return i.model_copy(update=upd) if upd else i
+
+
 class SlimPractice(Strict):
     items: list[SlimItem]
 
     def to_internal(self) -> PracticeSet:
+        """Items the model malformed (e.g. a multiple-choice question without options) are dropped one by one; the set is
+        invalid only if nothing usable remains. Deterministic validators in the practice agent then check the survivors."""
         out = []
         for i in self.items:
+            i = _salvage(i)
             tol = abs(i.numeric_tolerance) if math.isfinite(i.numeric_tolerance) else 0.0
-            out.append(PracticeItemDraft(kind=i.kind, prompt=i.prompt, options=i.options or None, answer_key=i.answer_key,
-                                         rubric=i.rubric or None, numeric_tolerance=tol if i.kind == "numeric" else None,
-                                         difficulty=i.difficulty, source_chunk_ids=i.source_chunk_ids))
-        return PracticeSet(items=out)
+            try:
+                out.append(PracticeItemDraft(kind=i.kind, prompt=i.prompt, options=i.options or None, answer_key=i.answer_key,
+                                             rubric=i.rubric or None, numeric_tolerance=tol if i.kind == "numeric" else None,
+                                             difficulty=i.difficulty, source_chunk_ids=i.source_chunk_ids))
+            except ValidationError:
+                continue
+        return PracticeSet(items=out[:6])          # raises ValidationError when empty (min_length=1): treated as invalid output
 
 
 class SlimEval(Strict):

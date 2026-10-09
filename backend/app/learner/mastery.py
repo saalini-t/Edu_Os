@@ -29,11 +29,13 @@ class MasteryParams:
     w_llm: float = 0.5
     w_teacher: float = 2.0
     easy_factor: float = 0.75
+    min_trusted_positive: int = 0       # positives from exact grading or a teacher required for 'demonstrated' (0 = not enforced)
 
     @classmethod
     def from_settings(cls, s: Settings) -> "MasteryParams":
         return cls(s.mastery_alpha0, s.mastery_beta0, s.mastery_half_life_days, s.t_master, s.n_min,
-                   s.mastery_min_distinct_sources, s.w_attempt_exact, s.w_attempt_llm, s.w_teacher, s.difficulty_factor_easy)
+                   s.mastery_min_distinct_sources, s.w_attempt_exact, s.w_attempt_llm, s.w_teacher, s.difficulty_factor_easy,
+                   s.mastery_min_trusted_positive)
 
 
 @dataclass
@@ -95,11 +97,14 @@ def mean(a: float, b: float) -> float:
     return a / (a + b)
 
 
-def status(post: Posterior, now: datetime | None, p: MasteryParams, has_open_hypothesis: bool) -> str:
+def status(post: Posterior, now: datetime | None, p: MasteryParams, has_open_hypothesis: bool,
+           trusted_positive: int | None = None) -> str:
     if post.evidence_count == 0:
         return "hypothesis" if has_open_hypothesis else "unknown"
     a, b = decayed(post, now, p)
     if mean(a, b) >= p.t_master and post.evidence_count >= p.n_min and len(post.sources) >= p.min_distinct:
+        if trusted_positive is not None and trusted_positive < p.min_trusted_positive:
+            return "emerging"        # model-graded evidence alone can raise the estimate but never demonstrates mastery
         return "demonstrated"
     return "emerging"
 

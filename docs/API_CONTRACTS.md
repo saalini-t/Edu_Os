@@ -1,5 +1,8 @@
 # EduOS API Contracts
 
+> **Scope update (Phases 3–5):** Jev is no longer in scope. Sections that discuss Jev / `JevDecisionProvider` are kept only as the historical record of ADR-001; nothing in the code depends on it and no Jev configuration exists. The deterministic R1–R10 engine is the only decision-maker; a decision-provider experiment may be added in a future phase. The as-built description is in [PHASE3_5_ACCEPTANCE.md](PHASE3_5_ACCEPTANCE.md).
+
+
 | | |
 |---|---|
 | **Status** | Target contracts; JSON examples are illustrative, not captured responses. Only a subset of the public endpoints exists (auth, documents incl. lifecycle, search, doubts incl. acknowledgment, evidence, admin trace/events); no `/internal/*` endpoints exist because the system is a monolith. **Section 9 below documents what Phase 2 actually implemented and overrides sections 2.2 and 5 where they differ.** **Update (2026-10-09):** the M1 vertical slice is implemented as a modular monolith; see [PHASE1_ACCEPTANCE](PHASE1_ACCEPTANCE.md) for what exists, what was verified, and deviations from this design. |
@@ -483,3 +486,23 @@ An acknowledgment never changes mastery. After `understood` / `check_me` the pol
 ### 9.6 Not implemented
 
 The `/internal/*` endpoints and Redis Stream events of sections 3–6 do not exist (monolith). Practice, attempts, grading, teacher/escalation endpoints, `request-teacher` resume and learner progress are still future work.
+
+
+## 10. Phases 3–5 as implemented
+
+All under `/v1`, bearer-authenticated, errors in the standard envelope. Writes that can be retried require `Idempotency-Key`.
+
+| Method and path | Role | Purpose |
+|---|---|---|
+| `POST /doubts/{id}/answers` `{item_id, answer, hints_used}` | student | One scored attempt per item; the reference answer is revealed only in this response (409 `ITEM_ALREADY_ANSWERED` afterwards) |
+| `GET /doubts/{id}/decisions` | student (own), admin | Per-decision plain-language explanation: rule, reasons, hard-rule precedence, evidence used, provider/model, fallbacks (admin also sees model calls and errors) |
+| `GET /learners/me/gap-map` | student | Per-topic status, reason, linked evidence with timestamps, hypotheses (suspected vs confirmed), prerequisite suggestions |
+| `GET /learners/me/passport` | student | Deterministic record with a SHA-256 digest: topics, answers, doubts and outcomes, teacher feedback, history, retention note |
+| `GET /learners/me/{evidence,progress,history}` | student | Ledger rows (acknowledgements have weight 0), per-topic mastery, change history |
+| `GET /escalations/{id}` | student (own) / teacher (authorised) / admin | Role-specific view; others get 404 |
+| `POST /escalations/{id}/messages`, `POST /escalations/{id}/rate` | student, teacher | Asynchronous thread (idempotent); one helpfulness rating |
+| `GET /teacher/escalations?status=`, `POST /teacher/escalations/{id}/{accept,release,resolve}` | teacher | Inbox, race-safe accept, idempotent resolve (writes bounded evidence, resumes the workflow) |
+| `GET/PUT /teacher/availability`, `GET /teacher/profile` | teacher | Validated slots (aware datetimes, ≤ 12 h, within 90 days) |
+| `GET /admin/escalations`, `GET /admin/teachers`, `POST /admin/escalations/{id}/assign`, `POST /admin/escalations/reconcile` | admin | Oversight, assign/reassign/override (audited), apply pending resumes and expiries |
+| `GET /admin/system`, `GET /admin/ingestion/jobs`, `GET /admin/runs`, `GET /admin/runs/{id}/trace` | admin | Provider health, retrieval mode in effect, counters, jobs, traces (with decision ids and evidence references) |
+| `POST /admin/students/{id}/anonymize` `{confirm: true}` | admin | ADR-013 |

@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, text
 from app.main import ALEMBIC_INI
 from tests.conftest import TEST_DB
 
-HEAD = "0009"
+HEAD = "0010"
 
 
 @pytest.fixture

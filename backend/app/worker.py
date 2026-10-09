@@ -32,7 +32,7 @@ def run_once(factory: sessionmaker[Session], settings: Settings, worker_id: str,
             job = ing.claim_next(worker_id)
             if job is None:
                 return done
-            result = ing.process_job(job.id)
+            result = ing.process_job(job.id, slice_s=settings.embed_slice_seconds)
             log.info("job processed", extra={"job_id": str(job.id), "result": result, "worker": worker_id})
         done += 1
     return done
@@ -41,18 +41,23 @@ def run_once(factory: sessionmaker[Session], settings: Settings, worker_id: str,
 def sweep(factory: sessionmaker[Session], settings: Settings, queue: WakeupQueue) -> dict:
     """Maintenance: requeue jobs whose worker died; re-announce QUEUED jobs (covers a lost or unavailable Redis)."""
     with factory() as db:
-        reaped = Ingestion(db, settings).reap_expired()
+        ing = Ingestion(db, settings)
+        reaped = ing.reap_expired()
+        repaired = ing.reconcile_embeddings()      # documents with missing vectors get a resumable repair job
         from sqlalchemy import text
         due = db.execute(text("SELECT id FROM know.ingestion_jobs WHERE status = 'QUEUED' AND available_at <= now() "
                               "ORDER BY created_at LIMIT 50")).scalars().all()
     announced = sum(1 for j in due if queue.notify(str(j)) is None)
-    out = {"reaped": reaped, "queued_due": len(due), "announced": announced}
+    out = {"reaped": reaped, "repair_queued": repaired, "queued_due": len(due), "announced": announced}
     try:                       # teaching + learner maintenance: expire escalations, resume runs, expire stale hypotheses
         from app.learner.service import LearnerService
         from app.llm.factory import build_provider
         from app.teaching.resume import reconcile
         with factory() as db:
-            out["escalations"] = reconcile(db, settings, build_provider(settings))
+            provider = build_provider(settings)
+            out["escalations"] = reconcile(db, settings, provider)
+            from app.workflow.recovery import recover_stuck_runs
+            out["runs"] = recover_stuck_runs(db, settings, provider)       # runs whose executor died mid model call
             ls = LearnerService(db, settings)
             out["hypotheses_expired"] = ls.expire_stale()
             db.commit()
@@ -70,6 +75,13 @@ def main() -> int:
     stop = {"flag": False}
     signal.signal(signal.SIGTERM, lambda *_: stop.update(flag=True))
     signal.signal(signal.SIGINT, lambda *_: stop.update(flag=True))
+    try:                       # load the embedding model before the first job instead of during it (6-9 s)
+        from app.knowledge.embeddings import get_embedding_provider
+        p = get_embedding_provider(s)
+        if p is not None:
+            p.embed_query("warm up")
+    except Exception as e:
+        log.warning("embedding warm-up failed; it will be retried when a job needs it", extra={"error": type(e).__name__})
     log.info("worker started", extra={"worker": worker_id, "redis": "configured" if s.redis_url else "not configured (polling)"})
     next_sweep = 0.0
     while not stop["flag"]:

@@ -76,7 +76,7 @@ class HybridRetriever:
         return [(str(r.id), float(r.sim)) for r in rows]
 
     def search(self, query: str, principal: Principal, *, course_id: uuid.UUID | None = None,
-               top_k: int = 6) -> SearchResult:
+               top_k: int = 6, need_from: str | None = None) -> SearchResult:
         if not query or not query.strip():
             return SearchResult(query=query or "", terms=[], mode_requested=self.mode, mode_used="none",
                                 fallback_reason="empty_query", method="none")
@@ -85,7 +85,7 @@ class HybridRetriever:
         if model is None:
             if self.mode == "dense":
                 raise RetrievalUnavailable(reason)
-            res = self.fts.search(query, principal, course_id=course_id, top_k=top_k)
+            res = self.fts.search(query, principal, course_id=course_id, top_k=top_k, need_from=need_from)
             res.mode_requested, res.mode_used, res.fallback_reason = self.mode, "fts", reason
             if reason and reason != "embeddings_not_configured":
                 log.warning("hybrid retrieval degraded to full-text only", extra={"reason": reason})
@@ -97,13 +97,14 @@ class HybridRetriever:
             if self.mode == "dense":
                 raise RetrievalUnavailable(f"dense_error: {type(e).__name__}") from e
             log.warning("dense retrieval failed; using full-text only", extra={"error": type(e).__name__})
-            res = self.fts.search(query, principal, course_id=course_id, top_k=top_k)
+            res = self.fts.search(query, principal, course_id=course_id, top_k=top_k, need_from=need_from)
             res.mode_requested, res.mode_used, res.fallback_reason = self.mode, "fts", f"dense_error: {type(e).__name__}"
             return res
 
         terms = query_terms(query)
-        need = max(1, min(self.s.ret_min_terms, len(terms))) if terms else 1
-        fts_res = self.fts.search(query, principal, course_id=course_id, top_k=pool) if self.mode == "hybrid" else None
+        basis = query_terms(need_from) if need_from else terms          # see PostgresFtsRetriever.search
+        need = max(1, min(self.s.ret_min_terms, len(basis) or len(terms))) if terms else 1
+        fts_res = self.fts.search(query, principal, course_id=course_id, top_k=pool, need_from=need_from) if self.mode == "hybrid" else None
         fts_hits = {h.chunk_id: h for h in (fts_res.hits if fts_res else [])}
         sims = dict(dense)
         rankings = [[cid for cid, _ in dense]]

@@ -11,9 +11,10 @@ log = logging.getLogger("eduos.errors")
 
 
 class AppError(Exception):
-    def __init__(self, status: int, code: str, message: str, details: dict | None = None):
+    def __init__(self, status: int, code: str, message: str, details: dict | None = None, headers: dict | None = None):
         super().__init__(message)
         self.status, self.code, self.message, self.details = status, code, message, details or {}
+        self.headers = headers
 
 
 def NotFound(what: str = "Resource") -> AppError:  # noqa: N802
@@ -32,7 +33,7 @@ def _body(request: Request, code: str, message: str, details: dict | None = None
 def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _app_error(request: Request, exc: AppError):
-        return JSONResponse(_body(request, exc.code, exc.message, exc.details), status_code=exc.status)
+        return JSONResponse(_body(request, exc.code, exc.message, exc.details), status_code=exc.status, headers=exc.headers)
 
     @app.exception_handler(HTTPException)
     async def _http_error(request: Request, exc: HTTPException):

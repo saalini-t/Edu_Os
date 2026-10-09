@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, setUnauthorizedHandler, User } from "./api";
 import { AdminEscalations, Ingestion, Overview, Runs } from "./admin/Admin";
+import { Documents } from "./Documents";
 import { Doubt } from "./student/Doubt";
 import { Home } from "./student/Home";
 import { GapMapView, PassportView } from "./student/Progress";
@@ -36,6 +37,7 @@ type NavItem = { to: string; label: string; match: (r: string) => boolean };
 const NAV: Record<User["role"], NavItem[]> = {
   student: [
     { to: "/", label: "Home", match: (r) => r === "/" || r.startsWith("/doubt") },
+    { to: "/documents", label: "Documents", match: (r) => r === "/documents" },
     { to: "/gap-map", label: "Gap Map", match: (r) => r === "/gap-map" },
     { to: "/passport", label: "Learning Passport", match: (r) => r === "/passport" },
   ],
@@ -47,6 +49,7 @@ const NAV: Record<User["role"], NavItem[]> = {
     { to: "/", label: "System health", match: (r) => r === "/" },
     { to: "/runs", label: "Workflow runs", match: (r) => r === "/runs" },
     { to: "/escalations", label: "Escalations", match: (r) => r === "/escalations" },
+    { to: "/documents", label: "Documents", match: (r) => r === "/documents" },
     { to: "/ingestion", label: "Ingestion", match: (r) => r === "/ingestion" },
   ],
 };
@@ -56,6 +59,7 @@ function Routes({ user, route, go }: { user: User; route: string; go: (to: strin
   if (user.role === "student") {
     if (route === "/") return <Home user={user} go={go} />;
     if (part[1] === "doubt" && part[2]) return <Doubt sid={part[2]} />;
+    if (route === "/documents") return <Documents />;
     if (route === "/gap-map") return <GapMapView />;
     if (route === "/passport") return <PassportView />;
   }
@@ -67,13 +71,28 @@ function Routes({ user, route, go }: { user: User; route: string; go: (to: strin
   if (user.role === "admin") {
     if (route === "/") return <Overview />;
     if (route === "/runs") return <Runs />;
+    if (route === "/documents") return <Documents />;
     if (route === "/escalations") return <AdminEscalations />;
     if (route === "/ingestion") return <Ingestion />;
   }
   return <Empty action={<a href="#/">Go to start</a>}>That page does not exist for your role.</Empty>;
 }
 
-export default function App() {
+import { Component, ReactNode } from "react";
+
+class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() {
+    return this.state.failed
+      ? <main className="login"><Notice kind="error"><b>Something went wrong showing this page.</b> <button className="linkish" onClick={() => { window.location.hash = "#/"; window.location.reload(); }}>Reload</button></Notice></main>
+      : this.props.children;
+  }
+}
+
+export default function App() { return <Boundary><AppInner /></Boundary>; }
+
+function AppInner() {
   const [user, setUser] = useState<User | null>(null);
   const [route, go] = useRoute();
   const [expired, setExpired] = useState(false);

@@ -1,5 +1,8 @@
 # EduOS Implementation Plan
 
+> **Scope update (Phases 3–5):** Jev is no longer in scope. Sections that discuss Jev / `JevDecisionProvider` are kept only as the historical record of ADR-001; nothing in the code depends on it and no Jev configuration exists. The deterministic R1–R10 engine is the only decision-maker; a decision-provider experiment may be added in a future phase. The as-built description is in [PHASE3_5_ACCEPTANCE.md](PHASE3_5_ACCEPTANCE.md).
+
+
 | | |
 |---|---|
 | **Status** | Plan. Phase 1 / M1 and **Phase 2 are implemented** as a modular monolith (see [PHASE1_ACCEPTANCE](PHASE1_ACCEPTANCE.md) and [PHASE2_ACCEPTANCE](PHASE2_ACCEPTANCE.md) for what exists, what was run, and deviations); Phases 3-6 are not started except the pieces noted below. Acceptance test IDs in this file are planning labels; the tests that exist and pass are listed in the acceptance documents. |
@@ -205,3 +208,14 @@ flowchart LR
 2. Phase 3: replace the fake provider path with a real-provider adapter behind the existing interface (needs credentials and a budget decision, open item O-1); add the SSE/streaming option if wanted.
 3. Phase 4: graded attempts and practice generation, the Beta/decay learner model consuming `core.evidence_events`, hypothesis lifecycle, and a designed anonymization path for the append-only ledger.
 4. Replace the evaluation set with a larger, double-annotated, partly student-written one and a fresh test split before making any further threshold or model decision.
+
+
+## Tracker: post-prototype hardening
+
+| Phase | Scope | Status |
+|---|---|---|
+| H1 | Short transactions around model calls, bounded model concurrency, per-user rate limits, login throttling, grader injection hardening, model-only mastery cap, append-only audit events (ADR-018, migration 0010) | **Done**: 325 backend tests passed, 1 skipped; see `docs/PHASE_H1_HARDENING.md` |
+| H2 | Large-PDF path in Docker (upload limit, OCR budget, throughput, upload UI) | not started |
+| H3 | Real-model evaluation harness and larger labelled set | not started |
+| H4 | Claim-level citation verification | not started |
+| H5 | Concept layer, numeric-equivalence grading | not started |

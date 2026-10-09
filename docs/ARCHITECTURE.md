@@ -1,5 +1,8 @@
 # EduOS Architecture
 
+> **Scope update (Phases 3–5):** Jev is no longer in scope. Sections that discuss Jev / `JevDecisionProvider` are kept only as the historical record of ADR-001; nothing in the code depends on it and no Jev configuration exists. The deterministic R1–R10 engine is the only decision-maker; a decision-provider experiment may be added in a future phase. The as-built description is in [PHASE3_5_ACCEPTANCE.md](PHASE3_5_ACCEPTANCE.md).
+
+
 | | |
 |---|---|
 | **Status** | Target design. Claims about behavior are requirements, not observations. **Update (2026-10-09):** the M1 vertical slice is implemented as a modular monolith; see [PHASE1_ACCEPTANCE](PHASE1_ACCEPTANCE.md) for what exists, what was verified, and deviations from this design. |
@@ -725,3 +728,40 @@ Env vars (names only): `DATABASE_URL_CORE`, `DATABASE_URL_ORCH`, `DATABASE_URL_K
 
 ### Data model additions in Phase 2 (migrations 0002 to 0005)
 `know.embedding_models` (registry, one `active`), `know.chunk_embeddings` (`vector` column, created with raw SQL only when pgvector exists; FK to chunks and models with ON DELETE CASCADE), `know.ingestion_jobs` (kind `ingest | replace | reindex`, lease, attempts, `enqueue_error`, payload), `know.document_events`, new columns `know.chunks.ingestion_version`, `know.documents.extraction_report` and `updated_at`, and `core.evidence_events` (append-only, CHECK-constrained). Not yet built from section 15: `learner_topic_state`, `gap_hypotheses`, practice items, attempts, teachers, escalations, feedback.
+
+
+## 22. ADRs added in Phases 3–5 (as built)
+
+### ADR-013: Anonymisation keeps the append-only ledger and never silently rewrites history
+- **Context:** evidence must be tamper-evident, but learners may need their personal data removed.
+- **Decision:** an administrator can anonymise a student (`POST /v1/admin/students/{id}/anonymize`, explicit `confirm`). In one transaction: personal content (sessions, messages, attempts, private documents, escalations, workflow runs, the user's email and name) is deleted; every ledger row is **re-pointed to a pseudonym user** (a database trigger allows exactly that one column change, only while `eduos.anonymizing=on`; all other updates and every delete remain blocked); the audit record stores metadata only. The pseudonym cannot log in.
+- **Consequences:** history is not erased and not rewritten; it is de-identified. There is **no promise of permanent retention** and no promise that de-identified evidence is unlinkable by a determined adversary with side information. Backups are outside this mechanism.
+
+### ADR-014: Model providers sit behind one interface; the model proposes, deterministic code disposes
+- `LLMProvider` (understand / explain / generate_practice / evaluate_answer). Implementations: `FakeLLMProvider` (deterministic, labelled), `PromptedProvider` over `OllamaBackend` or `OpenAICompatBackend`. Credentials are server-side; hosts outside loopback/private networks are refused unless `LLM_ALLOW_EXTERNAL=true`.
+- The model is shown a **compact flat schema** (`app/llm/slim.py`) because a 3B model degraded badly (near-empty objects, `Infinity`) under the full internal schemas; the result is mapped onto the strict schemas, which still reject unknown or invalid fields. Malformed practice items are dropped one by one and lettered options / missing rubrics are repaired deterministically; nothing is invented.
+- Output caps, bounded retries (a repeated identical request is asked at a warmer temperature), timeouts, model warm-up and `keep_alive`.
+- Agents (`app/agents/*`) wrap every call with deterministic validators and fallbacks: invalid understanding -> clarification; unverifiable citations -> regenerate once, then passages only; practice items must pass leak/shape/duplicate checks (else a hand-authored seed bank); free-text grades above the uncertainty gate are shown but **not** counted as evidence.
+
+### ADR-015: Mastery, Gap Map and Passport are read models over the ledger
+- `learner_topic_state` and `mastery_history` are rebuildable caches; replaying the ledger reproduces them exactly (tested). Gap Map statuses are a pure function of (mastery view, hypotheses); the Passport adds a SHA-256 digest of its canonical content so reproducibility is checkable.
+- Curated prerequisites (`core.topics.prerequisites`) only *suggest where to look*; they never change a status.
+
+### ADR-016: Escalation is a persisted checkpoint with deterministic matching
+- Matching is a weighted sum of five components (stored with every candidate). Access: the assigned teacher, or any course teacher while the case is OPEN and (they are a candidate or there are no candidates). Accept is race-safe (exactly one winner). Resolution writes bounded teacher evidence and resumes the run; a failed resume stays `pending` and a reconciler (worker and admin endpoint) applies it exactly once. Unanswered cases expire (48 h) and the run ends `UNRESOLVED`.
+
+### ADR-017: Service boundaries - the modular monolith is kept (decision, not a gap)
+- Target services (core-api, orchestrator, knowledge-svc, ingest-worker) exist as **modules with explicit gateways** (`CoreGateway`, `KnowledgeService`, schema-per-module ownership). Only `ingest-worker` is a separate process today. Splitting `knowledge-svc` out would add a network hop, service auth and a second deploy unit without fixing a problem we have; per the plan, extraction happens only when the integrated workflow is solid **and** there is a concrete benefit. Documented as **not extracted**; no empty services were created. Known cross-module read: the teacher case view reads course-visible chunks directly (`TeachingService.sources_for`); it would become a `knowledge-svc` call on extraction.
+
+
+### ADR-018: Workflow transactions never span a model call; model use is bounded; model output is never sole evidence
+- **Context:** the engine held a row lock (and a pooled connection) while waiting up to 2 x 120 s for a model; the model pool was unbounded in its queue; a steered grader could add positive evidence; audit rows were mutable.
+- **Decision:**
+  1. `WorkflowEngine._offload` commits, runs the slow call with no transaction open, then re-locks (`populate_existing`) and revalidates. Understand/explain/practice require the same run `version` and node (else `StaleRun`: the result is discarded). Free-text grading revalidates against the fresh state (the same item may not be scored twice; other items of the set may). Deterministic grading (multiple choice, numeric) stays in one transaction.
+  2. A `RUNNING` run whose `updated_at` is younger than `WORKFLOW_LEASE_SECONDS` is never re-entered by a plain `advance` (`own=True` is used only by the caller that just set it). An expired lease means a crashed executor; the worker sweep (`workflow/recovery.py`) takes it over.
+  3. Answer submission is retry-safe: the `Attempt` row is reused for the same `Idempotency-Key`.
+  4. `llm/base.py` gate: at most `LLM_MAX_CONCURRENCY` model calls per process; a slot is released only when the call really ends (also after a caller timeout); no slot within `LLM_QUEUE_WAIT_S` fails fast as `busy` and the agent fallback applies.
+  5. Per-user sliding-window limits (`RATE_LLM_ACTIONS_PER_MIN`, `RATE_DOUBTS_PER_HOUR`, in process memory) and database-backed login throttling (`LOGIN_MAX_FAILURES` per `LOGIN_WINDOW_MINUTES`, keyed by a hash of the address).
+  6. Grading: instruction-like answers are never sent to the model; self-contradictory verdicts and positive verdicts lacking the reference answer's key terms (`GRADER_MIN_LEXICAL_SUPPORT`) are shown but not counted; model-graded evidence alone can never reach "demonstrated" (`MASTERY_MIN_TRUSTED_POSITIVE` exact-graded or teacher positives are required).
+  7. `core.audit_events` is append-only by trigger (migration 0010); the only permitted rewrite is clearing `actor_id` inside an anonymization transaction.
+- **Consequences / known ceilings:** rate-limit windows are per process (use Redis before running several API processes); `TRUNCATE` is not blocked; free-text answers that paraphrase heavily are more often "uncertain"; a crashed run is resumed within about one lease plus one sweep interval; a duplicated `POST /v1/doubts` with the same key racing at the same instant can still create two sessions (pre-existing, not addressed here).
